@@ -6,8 +6,16 @@ as identity, an open **scorecard** → play **game sessions** → close
 scorecard lifecycle, and frame-style responses.
 
 Base URL: `https://sokoban.lulzx.space`. All bodies are JSON
-(`Content-Type: application/json`). Machine-readable OpenAPI:
-`GET /api/openapi.json`; interactive docs: `/api/docs`.
+(`Content-Type: application/json`).
+
+!!! tip "Interactive reference"
+
+    Every endpoint below is also browsable and callable at
+    [**/api/docs**](https://sokoban.lulzx.space/api/docs), generated from the
+    running server, with the machine-readable schema at
+    [/api/openapi.json](https://sokoban.lulzx.space/api/openapi.json). This
+    page is the prose companion: it explains the lifecycle and the rules the
+    schema cannot state.
 
 ## Authentication
 
