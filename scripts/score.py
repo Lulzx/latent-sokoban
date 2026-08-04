@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
-"""Official final-score calculator.
+"""Local 100-point profile for an agent. Not the leaderboard score.
+
+An entry's score is its success rate over the hidden set, computed by the
+server when a scorecard is closed (see docs/scoring.md). This script
+answers the questions that score cannot: generalization needs the Split B
+and C themes, planning speed needs wall-clock timing next to the model,
+and reproducibility needs a person rerunning the submission. None of the
+three is measurable over HTTP, so none of them is ranked.
 
 Consumes the results.json written by scripts/evaluate.py (run over splits
-A-D) and computes the 100-point competition score:
+A-D) and computes a 100-point profile:
 
-    Final = 45*S + 20*G + 10*M + 10*P + 10*D + 5*R
+    Profile = 45*S + 20*G + 10*M + 10*P + 10*D + 5*R
 
     S  standard success        success_rate on Split A
     G  generalization          mean success_rate of Splits B and C
@@ -13,12 +20,12 @@ A-D) and computes the 100-point competition score:
                                <50ms: 1.0, <100ms: 0.8, <200ms: 0.6,
                                <500ms: 0.4, otherwise 0.0
     D  deadlock avoidance      success_rate on Split D
-    R  reproducibility         0 or 1, asserted by the judge with
-                               --reproducible after rerunning the
-                               submission from its README
+    R  reproducibility         0 or 1, asserted with --reproducible after
+                               rerunning the submission from its README
 
-Every entry is scored by this exact script on the same results
-format. Usage:
+The profile is a self-assessment tool and a useful thing to report in a
+write-up. Nobody verifies it and it does not appear on the leaderboard.
+Usage:
 
     python scripts/score.py results.json --reproducible --out score.json
 """
@@ -79,7 +86,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("results", help="results.json from scripts/evaluate.py")
     parser.add_argument("--reproducible", action="store_true",
-                        help="judge confirms the submission retrained/reran "
+                        help="assert the submission retrained and reran "
                              "successfully from its own instructions")
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
@@ -99,7 +106,8 @@ def main() -> None:
     if score["call_violations"]:
         print(f"  !! {score['call_violations']} call-budget violations "
               f"(episodes already failed by the harness)")
-    print(f"\nFINAL SCORE: {score['final_score']} / 100")
+    print(f"\nLOCAL PROFILE: {score['final_score']} / 100")
+    print("Not the leaderboard score, which is hidden-set success rate.")
 
     if args.out:
         Path(args.out).write_text(json.dumps(score, indent=2))

@@ -101,3 +101,19 @@ distinguished from any other failure in the metrics.
 This agent solved 31 of 100. When it solved a level it took about 1.14×
 the optimal path (1 ÷ 0.874), and it wedged a crate unrecoverably in at
 least 8% of episodes.
+
+## What this score cannot tell you
+
+Success rate over the hidden set is the ranking, and it is the only number
+the server can stand behind. Three things it structurally cannot measure:
+
+* **Generalization** needs the Split B and C themes, which are local.
+* **Planning speed** needs wall-clock timing beside the model. The server
+  sees only the gaps between requests, which are mostly network.
+* **Reproducibility** needs a person retraining the submission from its own
+  instructions.
+
+`scripts/score.py` folds those into a 100-point local profile over splits
+A-D. Run it while you are building, and report it in a write-up if it
+helps. Nobody verifies it and it does not affect the leaderboard. See
+[the rules](RULES.md#profiling-your-agent-locally-optional).

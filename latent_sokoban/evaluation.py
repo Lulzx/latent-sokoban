@@ -1,7 +1,9 @@
 """Deterministic evaluation harness.
 
-Runs an Agent on a benchmark split (a JSON file of levels produced by
-scripts/generate_levels.py) and reports the official metrics:
+Runs an Agent on a local benchmark split (a JSON file of levels produced
+by scripts/generate_levels.py) and reports the harness metrics. The
+leaderboard score is separate: it comes from the server over the hidden
+set (see docs/scoring.md). These feed scripts/score.py's local profile.
 
   success_rate           solved within the action limit  (primary metric)
   move_efficiency        optimal_moves / agent_moves, solved levels only

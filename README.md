@@ -25,13 +25,13 @@ horizons. This benchmark deliberately lives in that regime, from pixels.
 
 ![Sokoban observations: current state, goal, visual-generalization theme, 10x10 board](docs/preview.png)
 
-*Left to right: current observation (8×8, three boxes), goal observation
+*Left to right: current observation (8×8, three crates), goal observation
 (player hidden), a Split-B visual-generalization theme, a 10×10 Split-C
 board. All observations are 64×64 RGB.*
 
 This repo is the neutral ground every entry is built on: same environment,
-same dataset, same levels, same scoring script. Models and planners live in
-each entrant's own repo.
+same dataset, same levels, same server scoring the same hidden set. Models
+and planners live in each entrant's own repo.
 
 ## The hidden set
 
@@ -120,7 +120,7 @@ Board art is [Kenney's Sokoban pack](https://www.kenney.nl/assets/sokoban)
 | Shared baseline | `baseline/` | CNN encoder, 128-d latent, residual MLP dynamics, VICReg-style regularization, beam-search MPC (needs PyTorch) |
 | Evaluation API and site | `server/` | FastAPI app, landing page, leaderboard, game, docs hosting |
 | Play level builder | `scripts/build_play_levels.py` | Parses the classic ASCII set into JSON for `/play` |
-| Scoring script | `scripts/score.py` | The official 100-point formula (45S+20G+10M+10P+10D+5R) |
+| Local profile | `scripts/score.py` | Optional 100-point self-assessment over splits A-D (45S+20G+10M+10P+10D+5R). Not the leaderboard score |
 | Hidden-test commitment | `scripts/hidden_test.py` | Encrypt-and-commit a secret generation seed |
 | Visualizer | `scripts/visualize.py` | Rollout contact sheets + per-step metadata |
 
@@ -290,9 +290,15 @@ Operational detail, environment variables and deployment:
 Full rules live in [docs/RULES.md](docs/RULES.md). Defaults: fixed shared
 dataset, ≤20M parameters, ≤12 GPU-hours for the final run, ≤500 ms inference
 per action, ≤256 counted dynamics calls per action, shared training seeds
-{13, 42, 137}, scores averaged over ≥3 evaluation seeds. Final score:
-45% standard success, 20% generalization, 10% move efficiency, 10% planning
-speed, 10% deadlock avoidance, 5% reproducibility.
+{13, 42, 137}.
+
+**The score is success rate over the hidden set**, tie-broken on move
+efficiency then ascending deadlock rate, computed by the server when a
+scorecard closes. `scripts/score.py` computes a separate 100-point local
+profile over splits A-D, covering what the hidden set structurally cannot:
+generalization needs the Split B and C themes, planning speed needs
+wall-clock timing next to the model, reproducibility needs a person
+rerunning the submission. That profile is a self-assessment, not a ranking.
 
 ## Credits
 

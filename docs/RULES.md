@@ -36,8 +36,9 @@ The competition should reward:
 * Original technical ideas
 * Reproducible experiments
 
-Every entrant uses the same evaluation environment, datasets, compute
-limits, and scoring script. None of it is negotiated per submission.
+Every entrant plays the same hidden levels, scored the same way by the
+same server, under the same rules. None of it is negotiated per
+submission.
 
 ## Getting to a submission
 
@@ -86,16 +87,21 @@ The final evaluation is run on hidden levels.
 
 ## Shared Environment
 
-Official environment configuration:
+Shared environment configuration:
 
 * Board size: 8 × 8
-* Number of boxes: 3
-* Number of goals: 3
+* Number of boxes: 1 to 4, rising with the level number
+* Number of goals: one per box
 * Observation size: 64 × 64 RGB
 * Actions: up, down, left, right
 * Dynamics: deterministic
-* Maximum episode length: 80 actions
+* Episode limit: three times that level's own optimal solution, floor 30
 * Invalid actions: treated as no-op transitions
+
+The hidden set runs the crate count from 1 to 4 across its 100 levels
+rather than holding it at 3, because solution length alone cannot carry a
+difficulty ramp on an 8 × 8 board. See
+[level generation](level-generation.md) for the measurements.
 
 A 6 × 6 one-box warmup configuration (Split W, 40-action limit) exists for
 verifying a baseline runs. It is never scored.
@@ -103,9 +109,7 @@ verifying a baseline runs. It is never scored.
 Rationale: with three boxes on an 8 × 8 board the reachable state space
 (~250,000 states) cannot be enumerated within the per-action planning
 budget, so planning must be guided by a learned heuristic rather than
-exhaustive search.
-
-The final benchmark may include larger or more difficult boards.
+exhaustive search. Each further crate multiplies that space again.
 
 ## Allowed Inputs
 
@@ -216,7 +220,8 @@ The final training run should use one of the shared seeds:
 137
 ```
 
-The official score should be averaged across at least three evaluation seeds.
+Average the local profile over at least three evaluation seeds; a single
+seed says less than it looks like it does.
 
 ## Required Baseline
 
@@ -398,64 +403,55 @@ Percentage of episodes in which the agent enters an irreversible deadlock.
 
 Measure performance variation across random seeds.
 
-## Final Score
+## The Score
 
-Recommended 100-point scoring system:
+An entry's score is its **success rate over the hidden set**: solved
+episodes divided by all 100, with every unplayed episode counted as
+unsolved. Ties break on move efficiency, then on ascending deadlock rate.
 
-Final Score = 45S + 20G + 10M + 10P + 10D + 5R
+The server computes it in `_game_summary` when a scorecard is closed.
+Nothing about it is self-reported, and there is no second number to
+negotiate. [Scoring](scoring.md) documents each metric in full.
 
-Where:
-
-* S: standard success score
-* G: generalization score
-* M: move-efficiency score
-* P: planning-speed score
-* D: deadlock-avoidance score
-* R: reproducibility score
-
-Each component is normalized between 0 and 1.
-
-### Standard Success: 45 points
-
-Based on success rate across Split A.
-
-### Generalization: 20 points
-
-Average performance across Splits B and C.
-
-### Move Efficiency: 10 points
-
-Based on path length relative to reference solutions.
-
-### Planning Speed: 10 points
-
-Recommended normalization:
-
-* 10 points: below 50 ms per action
-* 8 points: below 100 ms
-* 6 points: below 200 ms
-* 4 points: below 500 ms
-* 0 points: above the agreed inference limit
-
-### Deadlock Avoidance: 10 points
-
-Based on performance on Split D.
-
-### Reproducibility: 5 points
-
-Awarded when the model can be trained and evaluated using the submitted instructions.
-
-## Tie-Breaking Rules
+### Tie-Breaking
 
 Ties are resolved in this order:
 
-1. Higher total puzzle success
-2. Higher structural-generalization success
+1. Higher success rate over the hidden set
+2. Higher move efficiency
 3. Lower deadlock rate
-4. Lower average planning time
-5. Smaller model
-6. Fewer training samples
-7. Earlier submission
+4. Earlier submission
+
+## Profiling your agent locally (optional)
+
+The hidden set answers one question: how many levels does the agent solve.
+It cannot answer several others that matter while you are still building.
+Generalization needs the Split B and C themes, planning speed needs
+wall-clock timing next to the model, and reproducibility needs a person
+rerunning the submission from its own instructions. None of the three can
+be measured over HTTP, so none of them can be ranked.
+
+For those, run the local splits and `scripts/score.py`, which reports a
+100-point profile:
+
+```text
+Profile = 45S + 20G + 10M + 10P + 10D + 5R
+```
+
+* S: success rate on Split A
+* G: mean success rate across Splits B and C
+* M: move efficiency on Split A
+* P: planning speed, tiered from mean per-action time: 1.0 below 50 ms,
+  0.8 below 100 ms, 0.6 below 200 ms, 0.4 below 500 ms, 0 above
+* D: success rate on Split D, the deadlock-trap split
+* R: 1 when the submission retrains and reruns from its own instructions
+
+Each component is normalized between 0 and 1. Average it over at least
+three evaluation seeds.
+
+This number is a self-assessment tool and a useful thing to report in a
+write-up. It is not a ranking, it is not verified by anyone, and it does
+not appear on the leaderboard.
 
 ## Bonus Awards
 
@@ -579,14 +575,13 @@ is why it is the one thing stated as a condition of entry.
 To begin immediately, use:
 
 * Fixed Dataset Mode
-* 8 × 8 three-box Sokoban (6 × 6 one-box warmup for the baseline round)
+* 8 × 8 Sokoban, 1 to 4 crates (6 × 6 one-box warmup for the baseline round)
 * 20-million-parameter limit
 * 12 GPU-hour training budget
 * 500 ms inference limit
 * 256 counted dynamics calls per action
-* 80-action episode limit
 * Three evaluation seeds
-* Four official benchmark splits
+* The four local benchmark splits, A to D
 * Seven-day research round
 
 ## Before you submit
