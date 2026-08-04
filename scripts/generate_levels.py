@@ -33,10 +33,27 @@ from latent_sokoban.render import random_theme
 # learned-heuristic guided. Split W is the 6x6 warmup for the baseline
 # round only. The hidden set the leaderboard scores is generated separately
 # by latent_sokoban.levels.generate_hidden_set, on a 1-to-4 crate ramp.
+#
+# Split S is a diagnostic, not a difficulty step. W and A differ in board
+# size AND crate count at once, so a score that drops from one to the other
+# does not say which of the two caused it -- and those have different fixes:
+# an encoder that does not transfer across tile-grid size, or a planner that
+# cannot handle multiple crates. S is 8x8 with ONE crate, which pins each
+# comparison to a single variable:
+#
+#     W (6x6, 1 crate)  ->  S (8x8, 1 crate)   board size
+#     S (8x8, 1 crate)  ->  A (8x8, 3 crates)  crate count, nothing else
+#
+# The S-to-A comparison is exactly controlled: same size, same 0.10 wall
+# density, only the crate count moves. W-to-S also shifts density 0.12->0.10,
+# because S doubles as the public proxy for hidden tier 1 (see HIDDEN_TIERS),
+# and matching that mattered more than matching W's density.
 SPLITS = {
     # split: (size, n_boxes, wall_density, min_len, max_len, themed, deadlock, max_steps)
     "W": dict(size=6, n_boxes=1, wall_density=0.12, min_len=4, max_len=25,
               themed=False, deadlock=False, max_steps=40),
+    "S": dict(size=8, n_boxes=1, wall_density=0.10, min_len=4, max_len=20,
+              themed=False, deadlock=False, max_steps=60),
     "A": dict(size=8, n_boxes=3, wall_density=0.10, min_len=10, max_len=50,
               themed=False, deadlock=False, max_steps=80),
     "B": dict(size=8, n_boxes=3, wall_density=0.10, min_len=10, max_len=50,
@@ -80,7 +97,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--split", choices=sorted(SPLITS), help="single split to generate")
     parser.add_argument("--all", action="store_true",
-                        help="generate warmup split W plus splits A-D")
+                        help="generate warmup split W, splits A-D, and diagnostic S")
     parser.add_argument("--n", type=int, default=100, help="levels per split")
     parser.add_argument("--seed", type=int, default=1001)
     parser.add_argument("--out", required=True, help="output file (or directory with --all)")
@@ -89,7 +106,10 @@ def main() -> None:
     if args.all:
         out_dir = Path(args.out)
         out_dir.mkdir(parents=True, exist_ok=True)
-        for i, name in enumerate("WABCD"):
+        # S is appended rather than slotted in after W: the per-split seed is
+        # `--seed + i`, so inserting it mid-string would renumber A-D and
+        # regenerate the committed split files as different levels.
+        for i, name in enumerate("WABCDS"):
             split = generate_split(name, args.n, args.seed + i)
             path = out_dir / f"split_{name.lower()}.json"
             path.write_text(json.dumps(split, indent=1))

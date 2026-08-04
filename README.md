@@ -135,7 +135,7 @@ pip install -e .
 # generate the shared training dataset
 python scripts/generate_dataset.py --out data/train --episodes 2000 --seed 13
 
-# generate development benchmark splits A-D
+# generate development benchmark splits A-D, warmup W and diagnostic S
 python scripts/generate_levels.py --all --n 100 --seed 1001 --out levels/
 
 # sanity-check the harness with the built-in random agent
@@ -241,11 +241,29 @@ These public splits are for development and are separate from the hidden set:
 | Split | Purpose | Configuration |
 | --- | --- | --- |
 | W | Warmup (unscored) | 6×6, 1 box; baseline-round sanity checks only |
+| S | Diagnostic: board size vs crate count | 8×8, 1 box; the controlled midpoint between W and A |
 | A | Core performance | 8×8, 3 boxes, training visual style, unseen layouts |
 | B | Visual generalization | Split-A boards with randomized colours, checker patterns and pixel noise |
 | C | Structural generalization | 10×10 boards, 3 boxes, longer optimal solutions |
 | D | Deadlock avoidance | 8×8, 3 boxes; at least one reachable push is provably irreversible |
 | E | Bonus: five boxes | 10×10, 5 boxes, 160-action horizon (`--split E`) |
+
+Split S exists to answer a question the others cannot. W and A differ in
+board size **and** crate count simultaneously, so a score that collapses
+between them does not say which one caused it — and the two have entirely
+different fixes: an encoder that does not transfer across tile-grid size,
+or a planner that cannot cope with more than one crate. S is 8×8 with one
+crate, so each comparison moves a single variable:
+
+| Comparison | Holds fixed | Isolates |
+| --- | --- | --- |
+| W → S | 1 crate | board size |
+| S → A | 8×8 board, 0.10 wall density | crate count |
+
+S → A is exactly controlled. W → S also shifts wall density (0.12 → 0.10),
+because S doubles as the public proxy for the hidden set's opening tier,
+which is 8×8 / 1 crate / 0.10 — being able to predict your hidden-set
+opening score was worth more than matching W's density.
 
 The harness reports, per split, averaged over evaluation seeds: **success
 rate** (primary metric), **move efficiency** (optimal ÷ agent moves, solved
