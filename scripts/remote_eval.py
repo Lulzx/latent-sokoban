@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import gzip
 import json
 import os
 import sys
@@ -41,7 +42,11 @@ class Client:
         self.key = key
 
     def call(self, path: str, payload: dict | None = None) -> dict:
-        headers = {"Content-Type": "application/json"}
+        # urllib neither asks for gzip nor decodes it, and a frame is ~32 KB
+        # of base64 that compresses roughly fiftyfold. Over a full run that
+        # is the difference between tens of megabytes and a couple.
+        headers = {"Content-Type": "application/json",
+                   "Accept-Encoding": "gzip"}
         if self.key:
             headers["X-API-Key"] = self.key
         req = urllib.request.Request(
@@ -50,7 +55,10 @@ class Client:
             headers=headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
-                return json.loads(resp.read())
+                body = resp.read()
+                if resp.headers.get("Content-Encoding") == "gzip":
+                    body = gzip.decompress(body)
+                return json.loads(body)
         except urllib.error.HTTPError as e:
             detail = e.read().decode()[:300]
             sys.exit(f"HTTP {e.code} on {path}: {detail}")

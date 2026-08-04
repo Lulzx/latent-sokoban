@@ -180,6 +180,56 @@ def test_invalid_action_is_rejected(client):
                        json={"action": 9}).status_code == 422
 
 
+def test_frames_are_compressed_for_clients_that_ask(client, server):
+    """A frame is ~32KB of base64 that gzips to roughly a fiftieth."""
+    headers = register(client, "gzip-probe")
+    sid = client.post("/api/scorecards", headers=headers).json()["scorecard_id"]
+    path = f"/api/scorecards/{sid}/games/standard/start"
+
+    plain = client.post(path, headers={**headers, "Accept-Encoding": "identity"})
+    assert "content-encoding" not in plain.headers  # unchanged for old clients
+
+    sid2 = client.post("/api/scorecards", headers=headers).json()["scorecard_id"]
+    zipped = client.post(f"/api/scorecards/{sid2}/games/standard/start",
+                         headers={**headers, "Accept-Encoding": "gzip"})
+    assert zipped.headers.get("content-encoding") == "gzip"
+    # httpx decodes .content transparently, so the wire size has to come from
+    # the header the middleware set
+    on_the_wire = int(zipped.headers["content-length"])
+    assert on_the_wire < len(plain.content) / 5, (
+        f"{on_the_wire}B compressed vs {len(plain.content)}B plain")
+    # and the payload the agent sees is byte-identical either way
+    assert zipped.json()["observation"]["obs"] == plain.json()["observation"]["obs"]
+
+
+def test_goal_image_is_stable_across_an_episode(client, server):
+    """It is rendered once per episode now; it must still be the same bytes
+    every frame, and must change when the next episode starts."""
+    from latent_sokoban.render import render_goal
+
+    _, _, levels, solutions = server
+    headers = register(client, "goal-probe")
+    sid = client.post("/api/scorecards", headers=headers).json()["scorecard_id"]
+    frame = client.post(f"/api/scorecards/{sid}/games/standard/start",
+                        headers=headers).json()
+    gid = frame["session_id"]
+    first = frame["observation"]["goal"]
+    assert first == base64.b64encode(
+        render_goal(Level.from_ascii(levels[0]["ascii"])).tobytes()).decode()
+
+    for action in solutions[0][:-1]:      # stay inside episode 0
+        frame = client.post(f"/api/sessions/{gid}/act", headers=headers,
+                            json={"action": action}).json()
+        assert frame["observation"]["goal"] == first
+
+    frame = client.post(f"/api/sessions/{gid}/act", headers=headers,
+                        json={"action": solutions[0][-1]}).json()
+    assert frame["last"]["episode_done"] and frame["episode"]["index"] == 1
+    assert frame["observation"]["goal"] != first  # episode 1's own goal
+    assert frame["observation"]["goal"] == base64.b64encode(
+        render_goal(Level.from_ascii(levels[1]["ascii"])).tobytes()).decode()
+
+
 def test_spec_describes_the_loaded_levels(client, server):
     _, _, levels, _ = server
     game = client.get("/api/spec").json()["games"]["standard"]

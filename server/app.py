@@ -40,6 +40,7 @@ from pathlib import Path
 
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -68,6 +69,14 @@ NAME_RE = re.compile(r"^[\w .\-]{2,40}$")
 
 app = FastAPI(title="Latent Sokoban Challenge", docs_url="/api/docs",
               openapi_url="/api/openapi.json")
+
+# Every frame carries two base64 observations, about 32 KB, and roughly half
+# of that is the goal image, which is identical for the whole episode. The
+# observations are synthetic renders of flat tiles in few colours, so they
+# compress about fiftyfold: a frame goes from 32 KB to under 1 KB for a
+# fraction of a millisecond. Applies only when the client advertises
+# Accept-Encoding: gzip, so no existing client changes behaviour.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 _lock = threading.Lock()
 _sessions: dict[str, dict] = {}       # game sessions in flight
@@ -170,7 +179,9 @@ def _frame(session: dict, last: dict | None = None) -> dict:
         },
         "observation": None if session["done"] else {
             "obs": _b64(render(level, env.state)),
-            "goal": _b64(render_goal(level)),
+            # constant for the episode, so rendered and encoded once at its
+            # start rather than on every action
+            "goal": session["goal_b64"],
             "shape": [64, 64, 3],
             "dtype": "uint8",
             "encoding": "base64-raw",
@@ -187,6 +198,7 @@ def _start_episode(session: dict) -> None:
     session["level"] = Level.from_ascii(entry["ascii"])
     session["env"] = SokobanEnv(session["level"], max_steps=entry["max_steps"])
     session["env"].reset()
+    session["goal_b64"] = _b64(render_goal(session["level"]))
     session["pushed_any"] = False
     session["actions"] = []
 
