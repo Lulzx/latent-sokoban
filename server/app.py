@@ -449,6 +449,12 @@ def favicon():
 
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 
+# The MkDocs build output is generated, not committed, so a checkout that
+# has not run `mkdocs build` simply has no /docs rather than failing to boot.
+_DOCS_SITE = ROOT.parent / "site"
+if _DOCS_SITE.is_dir():
+    app.mount("/docs", StaticFiles(directory=_DOCS_SITE, html=True), name="docs")
+
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:

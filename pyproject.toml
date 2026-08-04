@@ -14,6 +14,13 @@ dependencies = ["numpy>=1.24"]
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 baseline = ["torch>=2.1"]
+# mkdocs is pinned below 2.0: that release drops the plugin system entirely,
+# which would take mkdocstrings and the Material theme with it.
+docs = [
+  "mkdocs>=1.6,<2.0",
+  "mkdocs-material>=9.5",
+  "mkdocstrings[python]>=0.24",
+]
 
 [tool.setuptools]
 packages = ["latent_sokoban"]

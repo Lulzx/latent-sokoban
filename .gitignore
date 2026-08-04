@@ -9,3 +9,4 @@ results.json
 *.pt
 server/leaderboard.db
 server/hidden_levels.json
+site/
