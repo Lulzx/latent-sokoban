@@ -19,3 +19,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
       - run: python -m pytest tests/ -q
+
+  # The baseline tests need torch, which the dev extra deliberately leaves
+  # out: it would put a few hundred MB into every matrix job to run one
+  # test. Without this job those tests do not fail in CI, they silently
+  # skip, which is how a regression in the world model would get through.
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --index-url https://download.pytorch.org/whl/cpu torch
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest tests/ -q -k baseline --no-header -rs
