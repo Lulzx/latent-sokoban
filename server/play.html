@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Play · Latent Sokoban Challenge</title>
+<meta name="description" content="Play Sokoban in the browser: 52 classic levels, with your progress saved as you go.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preload" href="/static/fonts/plex-mono-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/site.css">
+<link rel="stylesheet" href="/static/play.css">
+</head>
+<body class="play-body">
+
+<div class="play-bar">
+  <a class="home" href="/">← latent-sokoban</a>
+  <span class="lvl">Level <span id="lvl">-</span></span>
+  <span class="stats">
+    <span>moves <b id="moves">0</b></span>
+    <span>pushes <b id="pushes">0</b></span>
+    <span class="done">best <b id="best">-</b></span>
+  </span>
+</div>
+
+<main class="play-stage" id="stage">
+  <div class="board" id="board" role="application"
+       aria-label="Sokoban board. Use the arrow keys, or swipe, to move."></div>
+
+  <div class="win" id="win" hidden>
+    <div class="win-card" role="alertdialog" aria-labelledby="win-h">
+      <h2 id="win-h">Solved.</h2>
+      <p id="win-text"></p>
+      <div class="row">
+        <button type="button" class="primary" id="next">Next level</button>
+        <button type="button" id="restart-win"
+                onclick="document.getElementById('restart').click()">Replay</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="picker" id="picker" hidden>
+    <h2>Levels</h2>
+    <p class="hint">Solved levels are marked. Your progress is stored in this
+      browser, so you can come back and carry on.</p>
+    <div class="picker-grid" id="picker-grid"></div>
+    <p style="margin-top:18px"><button type="button" id="picker-close">Close</button></p>
+  </div>
+</main>
+
+<div class="play-deck">
+  <div class="dpad">
+    <button type="button" class="up"    data-dir="up"    aria-label="Move up">↑</button>
+    <button type="button" class="left"  data-dir="left"  aria-label="Move left">←</button>
+    <button type="button" class="down"  data-dir="down"  aria-label="Move down">↓</button>
+    <button type="button" class="right" data-dir="right" aria-label="Move right">→</button>
+  </div>
+  <p class="keyhint">
+    <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> move ·
+    <kbd>U</kbd> undo · <kbd>R</kbd> restart · <kbd>N</kbd>/<kbd>P</kbd> level
+  </p>
+  <div class="deck-actions">
+    <button type="button" id="undo">Undo</button>
+    <button type="button" id="restart">Restart</button>
+    <button type="button" id="pick">Levels</button>
+  </div>
+</div>
+
+<p id="status" class="visually-hidden" role="status" aria-live="polite"></p>
+
+<script src="/static/play.js"></script>
+</body>
+</html>

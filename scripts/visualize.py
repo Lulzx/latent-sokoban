@@ -3,7 +3,7 @@
 
 For each episode: the goal observation first (framed in black), then every
 frame of the trajectory in order. A meta.json sidecar records the actions,
-per-action planning time and model calls, and the outcome — everything the
+per-action planning time and model calls, and the outcome: everything the
 live-final display needs, and ready-made figures for technical reports.
 
     # what does the optimal solution look like?

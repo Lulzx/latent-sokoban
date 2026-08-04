@@ -4,7 +4,7 @@
 Your agent runs on YOUR machine; the server holds the hidden levels and
 only ever sends rendered observations. Protocol spec: docs/API.md.
 
-First time — create a key (bind your leaderboard name):
+First time, create a key (bind your leaderboard name):
 
     python scripts/remote_eval.py --register "my-lab"
 

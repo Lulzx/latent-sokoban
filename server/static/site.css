@@ -1,9 +1,9 @@
-/* Latent Sokoban Challenge — shared styles for / and /leaderboard.
+/* Latent Sokoban Challenge: shared styles for / and /leaderboard.
    The palette is the board's own: umber void, sand floor, crate brown,
    goal red, player blue. Plex Sans carries prose; Plex Mono carries
-   anything the machine cares about — code, endpoints, measurements. */
+   anything the machine cares about: code, endpoints, measurements. */
 
-/* ---- IBM Plex (OFL 1.1) — see static/fonts/LICENSE ---- */
+/* ---- IBM Plex (OFL 1.1), see static/fonts/LICENSE ---- */
 @font-face {
   font-family: "Plex Sans"; font-style: normal; font-weight: 400 700;
   font-display: swap;
@@ -158,10 +158,11 @@ h1 .px { color: var(--accent); }
   background-size: 100% 100%; background-repeat: no-repeat;
   background-image: url(/static/sprites/floor.png);
 }
+/* Red brick is the wall, inside and out. The brown brick that interior
+   walls used to get sat at almost the same value as the brown crate, so a
+   wall and a pushable crate read alike, exactly the confusion a puzzle
+   cannot afford. One wall material, unmistakably not a crate. */
 .cell.wall { background-image: url(/static/sprites/wall.png); }
-/* Red brick marks the boundary of the playfield; interior obstacles keep
-   the ordinary brick so the two never read as the same thing. */
-.cell.wall.outer { background-image: url(/static/sprites/wall-outer.png); }
 .cell.void { background-image: none; background-color: transparent; }
 /* The goal marker layers over the floor tile rather than replacing it. */
 .cell.goalcell {
@@ -178,7 +179,7 @@ h1 .px { color: var(--accent); }
   background-image: url(/static/sprites/crate-home.png);
   animation: land .4s ease-out;
 }
-/* Only brightness — the element's transform is its board position, so
+/* Only brightness. The element's transform is its board position, so
    animating transform here would fight the move. */
 @keyframes land {
   0%   { filter: brightness(1.5); }

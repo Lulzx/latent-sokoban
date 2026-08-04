@@ -9,7 +9,7 @@ ARC-AGI-3-style agent protocol:
     4. POST /api/sessions/{gid}/act       send an action        -> next frame
     5. POST /api/scorecards/{sid}/close   lock it; results hit the leaderboard
 
-Levels never leave the server — agents receive rendered 64x64 RGB
+Levels never leave the server. Agents receive rendered 64x64 RGB
 observations only. Closing a scorecard counts every unplayed or
 unfinished episode as unsolved, so partial runs can't cherry-pick.
 The exact wire schema lives in docs/API.md; machine-readable OpenAPI
@@ -461,3 +461,8 @@ def index() -> str:
 @app.get("/leaderboard", response_class=HTMLResponse)
 def leaderboard_page() -> str:
     return (ROOT / "leaderboard.html").read_text()
+
+
+@app.get("/play", response_class=HTMLResponse)
+def play_page() -> str:
+    return (ROOT / "play.html").read_text()

@@ -13,10 +13,11 @@
 <body>
 
 <div class="wrap masthead">
-  <p class="mark"><b>latent-sokoban</b> — an open benchmark for pixel-based world models</p>
+  <p class="mark"><b>latent-sokoban</b>, an open benchmark for pixel-based world models</p>
   <nav>
     <a href="/" aria-current="page">Overview</a>
     <a href="/leaderboard">Leaderboard</a>
+    <a href="/play">Play</a>
     <a href="/api/docs">API</a>
     <a href="https://github.com/Lulzx/latent-sokoban">GitHub</a>
   </nav>
@@ -154,7 +155,7 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
   dot.className = "sprite dot";
   board.appendChild(crate); board.appendChild(dot);
 
-  /* states: [playerR, playerC, crateR, crateC] — every step is one legal
+  /* states: [playerR, playerC, crateR, crateC]. Every step is one legal
      Sokoban move: walk up beside the crate, then push it right onto the
      goal. The wrap-around back to the start snaps (no transition). */
   /* the 5th field is which way the player faces on arrival */

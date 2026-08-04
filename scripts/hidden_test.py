@@ -3,7 +3,7 @@
 
 Because level generation is fully determined by (frozen script,
 constraints, seed), committing to a secret seed IS committing to the
-exact test levels — nothing needs to be generated, stored, or resisted
+exact test levels, so nothing needs to be generated, stored, or resisted
 peeking at until reveal day.
 
     # 1. Commit day (done by either competitor, or a third party):
@@ -20,7 +20,7 @@ peeking at until reveal day.
 The encrypted file is OpenSSL AES-256-CBC with PBKDF2; the commitment
 JSON stores a SHA-256 of the plaintext seed string so a tampered or
 wrong-password reveal is detected. The generator version is pinned by
-recording the git commit at commit time — evaluate at that commit.
+recording the git commit at commit time, so evaluate at that commit.
 """
 
 from __future__ import annotations
@@ -84,7 +84,7 @@ def reveal(args) -> None:
     digest = hashlib.sha256(seed_text.encode()).hexdigest()
     if digest != meta["seed_sha256"]:
         sys.exit("COMMITMENT MISMATCH: decrypted seed does not hash to the "
-                 "committed value — the archive or commitment was altered")
+                 "committed value: the archive or commitment was altered")
     seed = int(seed_text.split(":")[0])
     print(f"seed: {seed} (commitment verified)")
     print(f"generator was frozen at commit {meta['generator_git_commit']}")

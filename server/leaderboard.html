@@ -13,10 +13,11 @@
 <body>
 
 <div class="wrap masthead">
-  <p class="mark"><b>latent-sokoban</b> — an open benchmark for pixel-based world models</p>
+  <p class="mark"><b>latent-sokoban</b>, an open benchmark for pixel-based world models</p>
   <nav>
     <a href="/">Overview</a>
     <a href="/leaderboard" aria-current="page">Leaderboard</a>
+    <a href="/play">Play</a>
     <a href="/api/docs">API</a>
     <a href="https://github.com/Lulzx/latent-sokoban">GitHub</a>
   </nav>
@@ -53,7 +54,7 @@
   <div class="empty" id="lb-empty" hidden>
     <b>No runs yet.</b>
     Fifty hidden levels are waiting. Clone the repo, register a name, and take
-    the first push — <a href="/">the quickstart is four commands</a>.
+    the first push. <a href="/">The quickstart is four commands</a>.
   </div>
 
   <div class="empty" id="lb-error" hidden>
@@ -81,7 +82,7 @@
     <dd>Mean steps taken on the levels that were solved.</dd>
 
     <dt>Deadlocks</dt>
-    <dd>Share of episodes that reached an unrecoverable state — a crate shoved
+    <dd>Share of episodes that reached an unrecoverable state: a crate shoved
       into a corner or against a wall it can never leave.</dd>
 
     <dt>Date</dt>
@@ -129,7 +130,7 @@ fetch("/api/leaderboard").then(r => {
       `${Math.round(e.success_rate * e.episodes)}/${e.episodes}`,
       pct(e.success_rate),
       e.move_efficiency.toFixed(3),
-      e.avg_steps_solved == null ? "—" : e.avg_steps_solved.toFixed(1),
+      e.avg_steps_solved == null ? "-" : e.avg_steps_solved.toFixed(1),
       pct(e.deadlock_rate),
       e.date,
     ];
