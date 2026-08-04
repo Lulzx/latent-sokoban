@@ -46,6 +46,10 @@
   var sprites = [];          // sprites[i] belongs to crates[i], always
   var playerEl = null;
   var progress = load();
+  // Bumped by every loadLevel. A pending win callback carries the value it
+  // was scheduled under and does nothing if the board has moved on since.
+  var generation = 0;
+  var winTimer = null;
 
   // ---------------------------------------------------------------- storage
 
@@ -79,6 +83,8 @@
   }
 
   function loadLevel(i) {
+    generation++;                 // strands any win still waiting on a slide
+    clearTimeout(winTimer);
     index = Math.max(0, Math.min(i, levels.length - 1));
     level = levels[index];
     progress.current = index;
@@ -180,8 +186,15 @@
 
   // ------------------------------------------------------------------ moves
 
+  /* True while the board must not change: no level yet, the win card is up,
+     or a winning crate is still sliding. Undo has to respect this too, or a
+     click during the slide rewinds the very push the win is waiting on. */
+  function busy() {
+    return !state || !el.win.hidden || state.locked;
+  }
+
   function move(dir) {
-    if (!state || !el.win.hidden || state.locked) return;
+    if (busy()) return;
     var d = DIRS[dir];
     if (!d) return;
 
@@ -238,18 +251,23 @@
     }
     state.locked = true;
     var node = sprites[ci];
+    var gen = generation;
     var fired = false;
     var finish = function () {
       if (fired) return;
       fired = true;
       node.removeEventListener("transitionend", finish);
+      // Restarting or switching levels mid-slide leaves this scheduled
+      // against a board that no longer exists; declaring a win then would
+      // record the new level as solved in zero moves.
+      if (gen !== generation) return;
       state.locked = false;
       win();
     };
     node.addEventListener("transitionend", finish);
     // transitionend does not fire if the transform did not actually change
     // or the tab is backgrounded, so never wait on it alone.
-    setTimeout(finish, 400);
+    winTimer = setTimeout(finish, 400);
   }
 
   function solved() {
@@ -260,6 +278,7 @@
   }
 
   function undo() {
+    if (busy()) return;
     var s = state.history.pop();
     if (!s) return;
     state.player = s.player;
