@@ -1,4 +1,4 @@
-# Latent Sokoban — Agent Protocol Specification
+# Latent Sokoban: Agent Protocol Specification
 
 How a local agent communicates with the evaluation server for testing and
 scoring. The design follows the ARC-AGI-3 agent protocol shape: an API key
@@ -20,7 +20,7 @@ POST /api/keys
 
 201 →
 { "api_key": "lsk-…", "name": "my-lab",
-  "note": "shown once — store it." }
+  "note": "shown once; store it." }
 ```
 
 Errors: `409` name taken, `422` bad name, `429` per-IP daily limit.
@@ -37,7 +37,7 @@ POST /api/scorecards/{sid}/close              → final Score → leaderboard
 
 A **scorecard** is one submission attempt. A **game session** plays all
 hidden episodes of one game (v1 has one game, `standard`: 50 hidden 8×8
-three-box levels, 80 steps each). One session per game per scorecard —
+three-box levels, 80 steps each). One session per game per scorecard;
 retries need a fresh scorecard. **Closing a scorecard locks it**: every
 unplayed or unfinished episode counts as unsolved, so partial runs can't
 cherry-pick easy levels.
@@ -66,7 +66,7 @@ Every `start` and `act` response is a Frame:
   },
   "last": {                        // null on `start`
     "action": 2,
-    "moved": true,                 // false ⇒ the action was a no-op
+    "moved": true,                 // false means the action was a no-op
     "solved": false,               // episode solved by this action
     "episode_done": false          // solved or step limit hit
   },
@@ -88,7 +88,7 @@ POST /api/sessions/{gid}/act
 ```
 
 Invalid moves (into a wall, blocked push) are no-op transitions that
-still consume a step — exactly the shared environment's semantics. When
+still consume a step, matching the shared environment. When
 an episode ends the returned Frame already shows the *next* episode's
 first observation (`last.episode_done: true`, `episode.index` bumped);
 call `Agent.reset()` client-side on that signal.
@@ -119,7 +119,7 @@ then ascending `deadlock_rate`.
 
 ## Replays
 
-Each completed session stores a public replay — per-episode outcomes and
+Each completed session stores a public replay: per-episode outcomes and
 action strings (`"UDLR"` alphabet), never level layouts:
 
 ```
@@ -135,7 +135,7 @@ GET /api/replays/{gid}
   sessions server-wide.
 - The compute-side rules (≤20M parameters, ≤256 counted dynamics calls
   per action, no symbolic solvers, no decode-then-search) cannot be
-  verified over HTTP — they are enforced by source review for prize/
+  verified over HTTP; they are enforced by source review for prize/
   headline claims. Leaderboard entries are otherwise honor-tier; the
   hidden set is rotated periodically.
 - Reference client: `scripts/remote_eval.py` wraps any local

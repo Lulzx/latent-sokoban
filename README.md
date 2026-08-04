@@ -4,8 +4,8 @@ An open benchmark for **pixel-based latent world models**: agents see only
 rendered images of the current and goal Sokoban boards, learn dynamics from
 action-labelled trajectories, and plan in latent space.
 
-**Public leaderboard & live evaluation API: https://sokoban.lulzx.space** —
-anyone can register a key and evaluate an agent against 50 hidden levels
+**Public leaderboard & live evaluation API: https://sokoban.lulzx.space.**
+Anyone can register a key and evaluate an agent against 50 hidden levels
 held by the server (agent protocol: [docs/API.md](docs/API.md)):
 
 ```bash
@@ -17,7 +17,7 @@ python scripts/remote_eval.py --agent my_pkg.agent:MyAgent
 Why this is hard: our hidden levels need 10–50 optimal moves, and
 [SokoBench (arXiv:2601.20856)](https://arxiv.org/abs/2601.20856) shows even
 frontier reasoning models degrade consistently on Sokoban past ~25-move
-horizons — this benchmark deliberately lives in that regime, from pixels.
+horizons. This benchmark deliberately lives in that regime, from pixels.
 
 ![Sokoban observations: current state, goal, visual-generalization theme, 10x10 board](docs/preview.png)
 
@@ -33,8 +33,8 @@ each competitor's own repo.
 
 The benchmark is deliberately sized so that brute force loses:
 
-- **Official config is 8×8 with 3 boxes** (~250k reachable states), so the
-  state graph cannot be exhausted within the planning budget — search must
+- **Official config is 8×8 with 3 boxes** (~250k reachable states). The
+  state graph cannot be exhausted within the planning budget, so search must
   be guided by a learned heuristic. A 6×6 one-box warmup (Split W) exists
   for the baseline round only and is never scored.
 - **Planning is budgeted in counted dynamics calls, not wall-clock**: at
@@ -55,7 +55,7 @@ The benchmark is deliberately sized so that brute force loses:
 | Environment | `latent_sokoban/env.py` | Deterministic Sokoban (official: 8×8, 3 boxes, 80-step limit), 4 actions, invalid actions are no-ops, ASCII level format |
 | Renderer | `latent_sokoban/render.py` | Pure-numpy 64×64 RGB, themeable for visual generalization |
 | Level generator | `latent_sokoban/levels.py` | Rejection sampling against a BFS solver; every level is solvable, difficulty controlled by optimal-length band |
-| Solver | `latent_sokoban/solver.py` | Optimal BFS + deadlock detection (data generation and eval analysis only — never available to agents) |
+| Solver | `latent_sokoban/solver.py` | Optimal BFS + deadlock detection (data generation and eval analysis only; never available to agents) |
 | Dataset generator | `latent_sokoban/dataset.py`, `scripts/generate_dataset.py` | 50% random / 30% solver / 20% perturbed-solver trajectories, sharded `.npz` |
 | Benchmark splits | `scripts/generate_levels.py` | Warmup W + splits A–D (+ optional E), including the hidden-test-set protocol |
 | Evaluation harness | `latent_sokoban/evaluation.py`, `scripts/evaluate.py` | Deterministic, multi-seed, enforces the dynamics-call budget, reports all official metrics |
@@ -144,7 +144,7 @@ rediscover them:
 
 - **Plan short, replan often.** One-step prediction is sharp (open-loop
   drift after 1 imagined step ≈ one true transition), but drift reaches
-  the *entire* typical start-to-goal distance after ~6 imagined steps —
+  the *entire* typical start-to-goal distance after ~6 imagined steps, so
   long beams score pure noise. The baseline therefore plans at horizon 3
   and relies on MPC replanning. Extending the usable horizon (multi-step
   rollout losses, better dynamics) is the single most obvious research
@@ -152,14 +152,14 @@ rediscover them:
 - **Pure greedy oscillates.** The Euclidean distance field has local
   minima (any required detour temporarily increases distance), and a
   deterministic argmin planner parks in them, bouncing left–right
-  forever — even *oracle* dynamics with greedy latent distance only
+  forever. Even *oracle* dynamics with greedy latent distance only
   solves 16% of warmup levels. The baseline adds small seeded Gumbel
   noise (η = 0.2) to plan scores to break loops. Learned value/distance
   functions that understand detours are the second obvious direction.
 
 The 0% on the official 8×8 three-box config is the point of the
 competition: the baseline verifies the pipeline end-to-end (training
-doesn't collapse — latent std ≈ 1.0; planning runs within budget;
+doesn't collapse, latent std ≈ 1.0; planning runs within budget;
 evaluation is deterministic), and everything above 0% on Split A is
 earned by research.
 
@@ -167,7 +167,7 @@ earned by research.
 
 | Split | Purpose | Configuration |
 | --- | --- | --- |
-| W | Warmup (unscored) | 6×6, 1 box — baseline-round sanity checks only |
+| W | Warmup (unscored) | 6×6, 1 box; baseline-round sanity checks only |
 | A | Core performance | 8×8, 3 boxes, training visual style, unseen layouts |
 | B | Visual generalization | Split-A boards with randomized colours, checker patterns and pixel noise |
 | C | Structural generalization | 10×10 boards, 3 boxes, longer optimal solutions |

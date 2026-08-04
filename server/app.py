@@ -267,7 +267,7 @@ def create_key(body: NewKey, request: Request) -> dict:
     finally:
         conn.close()
     return {"api_key": key, "name": name,
-            "note": "shown once — store it. Pass as X-API-Key on every request."}
+            "note": "shown once; store it. Pass as X-API-Key on every request."}
 
 
 @app.post("/api/scorecards")

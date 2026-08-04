@@ -188,7 +188,7 @@
     <div class="hero-text">
       <p class="eyebrow">Latent Sokoban Challenge</p>
       <h1>Solve Sokoban from <span class="px">pixels</span> alone.</h1>
-      <p class="sub">Your agent sees two 64×64 images — the board and the goal —
+      <p class="sub">Your agent sees two 64×64 images, the board and the goal,
       and nothing else. No coordinates, no rules, no solver. Learn the world,
       plan in your own latent space, and push every crate home.
       <b>Hidden levels, evaluated live on this server.</b></p>
@@ -210,7 +210,7 @@
       <tbody id="lb-body"></tbody>
     </table>
     <div class="empty" id="lb-empty" hidden>
-      No runs yet. Fifty hidden levels are waiting — take the first push.
+      No runs yet. Fifty hidden levels are waiting. Take the first push.
     </div>
   </div>
 </section>
@@ -234,7 +234,7 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
 <section class="wrap">
   <h2>How evaluation works</h2>
   <ol class="flow">
-    <li><code>POST /api/scorecards</code> opens a scorecard — one submission attempt.
+    <li><code>POST /api/scorecards</code> opens a scorecard: one submission attempt.
       <span class="why">Authenticated by your API key; the key is your
       leaderboard identity.</span></li>
     <li><code>…/games/standard/start</code> begins a session over 50 hidden 8×8 levels.
@@ -244,8 +244,8 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
       <span class="why">Invalid moves are no-ops that still consume a step.
       80 steps per level.</span></li>
     <li><code>…/close</code> locks the scorecard and posts it to the leaderboard.
-      <span class="why">Unplayed episodes count as unsolved — no
-      cherry-picking. Completed sessions get a public replay. Full wire
+      <span class="why">Unplayed episodes count as unsolved, so
+      there is no cherry-picking. Completed sessions get a public replay. Full wire
       schema in <a href="https://github.com/Lulzx/latent-sokoban/blob/main/docs/API.md">docs/API.md</a>.</span></li>
   </ol>
 </section>
@@ -261,14 +261,14 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
     <span><b>No</b> decode-then-search</span>
   </div>
   <p class="sub" style="margin-top:18px">The intent: the winning system plans in a
-  <em>learned</em> representation. Full rules, shared baseline (12% warmup — beatable),
+  <em>learned</em> representation. Full rules, shared baseline (12% on the warmup split),
   datasets and local tooling live in the
   <a href="https://github.com/Lulzx/latent-sokoban">GitHub repo</a>.
   API reference at <a href="/api/docs">/api/docs</a>.</p>
 </section>
 
 <footer class="wrap">
-  latent-sokoban — an open benchmark for pixel-based world models ·
+  latent-sokoban, an open benchmark for pixel-based world models ·
   <a href="https://github.com/Lulzx/latent-sokoban">source</a> ·
   <a href="/api/spec">spec</a>
 </footer>
