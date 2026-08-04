@@ -136,8 +136,22 @@ def main() -> None:
         if len(lv["crates"]) != len(lv["goals"]):
             skipped.append((i, f"{len(lv['crates'])} crates vs {len(lv['goals'])} goals"))
             continue
-        lv["n"] = len(out) + 1
+        lv["source_n"] = i
         out.append(lv)
+
+    # Order easiest first. The source file is broadly a ramp already, but it
+    # ends with two throwaway levels (1 crate on 3 floor tiles, and 5 crates
+    # on 24) that land after a 240-crate monster, so playing straight through
+    # falls off a cliff at the end.
+    #
+    # True difficulty would need each level solved, which is intractable for
+    # the largest ones here, so this sorts on structure instead: crate count
+    # first, since each extra crate multiplies the state space and the ways
+    # to deadlock, then floor area as a tie-break. It is a proxy, and within
+    # a crate count it will not always agree with how hard a level feels.
+    out.sort(key=lambda lv: (len(lv["crates"]), len(lv["floor"])))
+    for n, lv in enumerate(out, 1):
+        lv["n"] = n
 
     Path(args.out).write_text(json.dumps({
         "source": "https://github.com/morenod/sokoban",

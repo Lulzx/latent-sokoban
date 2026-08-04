@@ -13,7 +13,9 @@
 (function () {
   "use strict";
 
-  var STORE = "latent-sokoban.play.v1";
+  // Bumped to v2 when the levels were reordered by difficulty: progress is
+  // keyed by level index, so old saves would mark the wrong levels solved.
+  var STORE = "latent-sokoban.play.v2";
   var DIRS = {
     up:    [-1, 0], down:  [1, 0],
     left:  [0, -1], right: [0, 1]
