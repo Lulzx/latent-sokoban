@@ -24,7 +24,8 @@ from pathlib import Path
 
 import numpy as np
 
-from latent_sokoban.levels import generate_deadlock_level, generate_level
+from latent_sokoban.levels import (MIN_STEPS, STEP_MULTIPLE, _tier_band,
+                                   generate_deadlock_level, generate_level)
 from latent_sokoban.render import random_theme
 
 # These are the local development splits, held at 8x8 with 3 boxes: large
@@ -52,7 +53,10 @@ SPLITS = {
     # split: (size, n_boxes, wall_density, min_len, max_len, themed, deadlock, max_steps)
     "W": dict(size=6, n_boxes=1, wall_density=0.12, min_len=4, max_len=25,
               themed=False, deadlock=False, max_steps=40),
+    # band/per-level step budget copied from HIDDEN_TIERS[0] so S predicts the
+    # hidden opening rather than merely resembling it.
     "S": dict(size=8, n_boxes=1, wall_density=0.10, min_len=4, max_len=20,
+              band=((4, 8), (14, 20)), per_level_steps=True,
               themed=False, deadlock=False, max_steps=60),
     "A": dict(size=8, n_boxes=3, wall_density=0.10, min_len=10, max_len=50,
               themed=False, deadlock=False, max_steps=80),
@@ -73,18 +77,42 @@ def generate_split(name: str, n: int, seed: int) -> dict:
     levels = []
     while len(levels) < n:
         gen = generate_deadlock_level if cfg["deadlock"] else generate_level
-        level, solution = gen(
-            rng,
-            size=cfg["size"],
-            n_boxes=cfg["n_boxes"],
-            wall_density=cfg["wall_density"],
-            min_solution_len=cfg["min_len"],
-            max_solution_len=cfg["max_len"],
-        )
+        # A flat [min_len, max_len] band accepts whatever the sampler happens
+        # to produce, and short boards are far likelier: split S over a flat
+        # 4-20 band came out with a mean optimal length of 9.4 and only two
+        # levels past 15. Splits carrying `band` instead interpolate a narrow
+        # band per level the way generate_hidden_set does, which forces the
+        # long levels to exist rather than hoping for them.
+        if cfg.get("band"):
+            lo, hi = _tier_band(len(levels), n, *cfg["band"])
+        else:
+            lo, hi = cfg["min_len"], cfg["max_len"]
+        for attempt in range(4):
+            try:
+                level, solution = gen(
+                    rng,
+                    size=cfg["size"],
+                    n_boxes=cfg["n_boxes"],
+                    wall_density=cfg["wall_density"],
+                    min_solution_len=lo,
+                    max_solution_len=hi,
+                )
+                break
+            except RuntimeError:
+                # Same escape hatch as the hidden set: widen rather than hang
+                # when a target lands where sampling is very unlikely.
+                if attempt == 3:
+                    raise
+                lo, hi = max(2, lo - 3), hi + 4
+        # A flat budget is loose on short levels and starving on long ones; the
+        # hidden set scales it per level, and S has to match or it scores its
+        # easy levels more generously than the tier it stands in for.
+        steps = (max(MIN_STEPS, STEP_MULTIPLE * len(solution))
+                 if cfg.get("per_level_steps") else cfg["max_steps"])
         entry = {
             "ascii": level.to_ascii(),
             "optimal_len": len(solution),
-            "max_steps": cfg["max_steps"],
+            "max_steps": steps,
         }
         if cfg["themed"]:
             entry["theme"] = dataclasses.asdict(random_theme(rng))

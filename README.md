@@ -261,9 +261,17 @@ crate, so each comparison moves a single variable:
 | S → A | 8×8 board, 0.10 wall density | crate count |
 
 S → A is exactly controlled. W → S also shifts wall density (0.12 → 0.10),
-because S doubles as the public proxy for the hidden set's opening tier,
-which is 8×8 / 1 crate / 0.10 — being able to predict your hidden-set
-opening score was worth more than matching W's density.
+because S doubles as the public proxy for the hidden set's opening tier:
+it copies tier 1's crate count, density, per-level solution-length band and
+per-level step budget, so it predicts your hidden opening rather than merely
+resembling it. Being able to do that was worth more than matching W's
+density, and a 0.02 density difference is not what separates 6×6 from 8×8.
+
+The band matters more than it looks. Splits normally accept any level inside
+one flat `[min_len, max_len]` window, and short boards are far likelier, so a
+flat 4–20 window produced a mean optimal length of 9.4 against tier 1's 11.2
+— and scored the baseline at 8% where the hidden opening gives 0%. Ramping a
+narrow band per level, as the hidden set does, closes that gap.
 
 The harness reports, per split, averaged over evaluation seeds: **success
 rate** (primary metric), **move efficiency** (optimal ÷ agent moves, solved
