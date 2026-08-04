@@ -76,6 +76,13 @@ app = FastAPI(title="Latent Sokoban Challenge", docs_url="/api/docs",
 # compress about fiftyfold: a frame goes from 32 KB to under 1 KB for a
 # fraction of a millisecond. Applies only when the client advertises
 # Accept-Encoding: gzip, so no existing client changes behaviour.
+#
+# It also gzips the fonts and sprites, which are already compressed and
+# gain nothing (a woff2 goes 40240 -> 40082 bytes). That is about fifteen
+# small files on a cold page load against thousands of frames per
+# evaluation run, so it is not worth a content-type filter to avoid.
+# Range requests are unaffected: a 206 comes back uncompressed with its
+# content-range intact.
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 _lock = threading.Lock()
