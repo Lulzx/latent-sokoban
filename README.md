@@ -5,28 +5,47 @@ research competition: build the best **pixel-based latent world model** for
 Sokoban. Agents see only rendered images of the current and goal boards, learn
 dynamics from action-labelled trajectories, and plan in latent space.
 
-![Sokoban observations: current state, goal, visual-generalization theme, 7x7 board](docs/preview.png)
+![Sokoban observations: current state, goal, visual-generalization theme, 10x10 board](docs/preview.png)
 
-*Left to right: current observation, goal observation (player hidden), a
-Split-B visual-generalization theme, a 7×7 Split-C board. All observations are
-64×64 RGB.*
+*Left to right: current observation (8×8, three boxes), goal observation
+(player hidden), a Split-B visual-generalization theme, a 10×10 Split-C
+board. All observations are 64×64 RGB.*
 
 This repo is the neutral ground both competitors build on: same environment,
 same dataset, same levels, same scoring script. Models and planners live in
 each competitor's own repo.
 
+## Anti-brute-force design
+
+The benchmark is deliberately sized so that brute force loses:
+
+- **Official config is 8×8 with 3 boxes** (~250k reachable states), so the
+  state graph cannot be exhausted within the planning budget — search must
+  be guided by a learned heuristic. A 6×6 one-box warmup (Split W) exists
+  for the baseline round only and is never scored.
+- **Planning is budgeted in counted dynamics calls, not wall-clock**: at
+  most **256 learned-dynamics calls per action** (one call = one predicted
+  transition of one candidate state; a batch of B rolled H steps costs
+  B×H). Planners tick a shared `CallMeter`; the harness fails any episode
+  that exceeds the cap and logs per-action counts into the results. Meter
+  honesty is verified by source review of the frozen submission.
+- **Decode-then-search is prohibited by rule**: no module may reconstruct
+  an exact symbolic board at inference time or run graph search over
+  enumerated discrete states, whether the decoder or transition function
+  was hand-coded or learned. See [docs/RULES.md](docs/RULES.md).
+
 ## What's here
 
 | Component | Where | Notes |
 | --- | --- | --- |
-| Environment | `latent_sokoban/env.py` | Deterministic 6×6 Sokoban, 4 actions, invalid actions are no-ops, 40-step limit, ASCII level format |
+| Environment | `latent_sokoban/env.py` | Deterministic Sokoban (official: 8×8, 3 boxes, 80-step limit), 4 actions, invalid actions are no-ops, ASCII level format |
 | Renderer | `latent_sokoban/render.py` | Pure-numpy 64×64 RGB, themeable for visual generalization |
 | Level generator | `latent_sokoban/levels.py` | Rejection sampling against a BFS solver; every level is solvable, difficulty controlled by optimal-length band |
 | Solver | `latent_sokoban/solver.py` | Optimal BFS + deadlock detection (data generation and eval analysis only — never available to agents) |
 | Dataset generator | `latent_sokoban/dataset.py`, `scripts/generate_dataset.py` | 50% random / 30% solver / 20% perturbed-solver trajectories, sharded `.npz` |
-| Benchmark splits | `scripts/generate_levels.py` | Splits A–D (+ optional E), including the hidden-test-set protocol |
-| Evaluation harness | `latent_sokoban/evaluation.py`, `scripts/evaluate.py` | Deterministic, multi-seed, reports all official metrics |
-| Agent interface | `latent_sokoban/agent.py` | The only contract competitors implement |
+| Benchmark splits | `scripts/generate_levels.py` | Warmup W + splits A–D (+ optional E), including the hidden-test-set protocol |
+| Evaluation harness | `latent_sokoban/evaluation.py`, `scripts/evaluate.py` | Deterministic, multi-seed, enforces the dynamics-call budget, reports all official metrics |
+| Agent interface | `latent_sokoban/agent.py` | The only contract competitors implement, including the `CallMeter` |
 
 The only dependency is numpy.
 
@@ -60,7 +79,9 @@ class MyAgent(Agent):
 
     def act(self, obs, goal, action_history) -> int:
         # obs, goal: (64, 64, 3) uint8 images. Return 0=up 1=down 2=left 3=right.
-        ...
+        z_next = self.dynamics(z_batch, actions)   # your world model
+        self.call_meter.tick(len(z_batch))         # REQUIRED: count every
+        ...                                        # dynamics forward pass
 ```
 
 Then evaluate it:
@@ -80,15 +101,17 @@ generation and post-hoc analysis).
 
 | Split | Purpose | Configuration |
 | --- | --- | --- |
-| A | Core performance | 6×6, 1 box, training visual style, unseen layouts |
+| W | Warmup (unscored) | 6×6, 1 box — baseline-round sanity checks only |
+| A | Core performance | 8×8, 3 boxes, training visual style, unseen layouts |
 | B | Visual generalization | Split-A boards with randomized colours, checker patterns and pixel noise |
-| C | Structural generalization | 7×7 boards, longer optimal solutions, denser walls |
-| D | Deadlock avoidance | Solvable levels where at least one reachable push is provably irreversible |
-| E | Bonus: two boxes | 7×7, 2 boxes, longer horizon (`--split E`) |
+| C | Structural generalization | 10×10 boards, 3 boxes, longer optimal solutions |
+| D | Deadlock avoidance | 8×8, 3 boxes; at least one reachable push is provably irreversible |
+| E | Bonus: five boxes | 10×10, 5 boxes, 160-action horizon (`--split E`) |
 
 The harness reports, per split, averaged over evaluation seeds: **success
 rate** (primary metric), **move efficiency** (optimal ÷ agent moves, solved
-levels only), **planning time** per action, and **deadlock rate** (fraction of
+levels only), **planning time** per action, **model calls** per action
+(average, max, and cap violations), and **deadlock rate** (fraction of
 episodes that entered a provably dead state, checked exactly with a bounded
 BFS after every push).
 
@@ -120,7 +143,7 @@ seed alone is a commitment to the exact test levels.
 
 Full rules live in [docs/RULES.md](docs/RULES.md). Defaults: fixed shared
 dataset, ≤20M parameters, ≤12 GPU-hours for the final run, ≤500 ms inference
-per action, ≤10,000 planning rollouts per action, shared training seeds
+per action, ≤256 counted dynamics calls per action, shared training seeds
 {13, 42, 137}, scores averaged over ≥3 evaluation seeds. Final score:
 45% standard success, 20% generalization, 10% move efficiency, 10% planning
 speed, 10% deadlock avoidance, 5% reproducibility.

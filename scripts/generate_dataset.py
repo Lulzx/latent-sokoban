@@ -31,9 +31,9 @@ def main() -> None:
     parser.add_argument("--episodes", type=int, default=2000)
     parser.add_argument("--shard-size", type=int, default=500, help="episodes per shard")
     parser.add_argument("--seed", type=int, default=13)
-    parser.add_argument("--size", type=int, default=6, help="board size")
-    parser.add_argument("--boxes", type=int, default=1)
-    parser.add_argument("--max-steps", type=int, default=40)
+    parser.add_argument("--size", type=int, default=8, help="board size")
+    parser.add_argument("--boxes", type=int, default=3)
+    parser.add_argument("--max-steps", type=int, default=80)
     parser.add_argument("--mix", type=float, nargs=3, default=(0.5, 0.3, 0.2),
                         metavar=("RANDOM", "SOLVER", "PERTURBED"))
     args = parser.parse_args()

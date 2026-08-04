@@ -187,6 +187,65 @@ def test_evaluation_deterministic(tmp_path):
     assert s1.episodes == 4
 
 
+def test_call_budget_enforced(tmp_path):
+    from latent_sokoban.evaluation import evaluate_split
+    from latent_sokoban.agent import Agent
+    from latent_sokoban.solver import bfs_solve
+
+    level = Level.from_ascii(SIMPLE)
+    solution = bfs_solve(level)
+    split = tmp_path / "split.json"
+    split.write_text(json.dumps({"name": "test", "max_steps": 40, "levels": [
+        {"ascii": level.to_ascii(), "optimal_len": len(solution), "max_steps": 40}]}))
+
+    class OracleAgent(Agent):
+        """Plays the optimal solution while ticking a fixed call count."""
+
+        def __init__(self, calls_per_action):
+            super().__init__()
+            self.calls_per_action = calls_per_action
+
+        def reset(self):
+            self.plan = list(solution)
+
+        def act(self, obs, goal, history):
+            self.call_meter.tick(self.calls_per_action)
+            return self.plan.pop(0)
+
+    # within budget: solves
+    s, eps = evaluate_split(OracleAgent(100), split, call_cap=256)
+    assert s.success_rate == 1.0 and s.call_violations == 0
+    assert s.avg_model_calls == 100.0 and s.max_model_calls == 100
+
+    # over budget, strict: episode fails
+    s, eps = evaluate_split(OracleAgent(1000), split, call_cap=256)
+    assert s.success_rate == 0.0 and s.call_violations == 1
+
+    # over budget, lenient: solves but violation is recorded
+    s, eps = evaluate_split(OracleAgent(1000), split, call_cap=256,
+                            strict_calls=False)
+    assert s.success_rate == 1.0 and s.call_violations == 1
+
+    # meter is fresh per episode (not cumulative across episodes)
+    two = {"name": "t2", "max_steps": 40, "levels": [
+        {"ascii": level.to_ascii(), "optimal_len": len(solution), "max_steps": 40},
+        {"ascii": level.to_ascii(), "optimal_len": len(solution), "max_steps": 40}]}
+    split.write_text(json.dumps(two))
+    s, eps = evaluate_split(OracleAgent(200), split, call_cap=256)
+    assert s.success_rate == 1.0 and s.max_model_calls == 200
+
+
+def test_multibox_generation_and_solving():
+    rng = np.random.default_rng(0)
+    level, solution = generate_level(rng, size=8, n_boxes=3, wall_density=0.10,
+                                     min_solution_len=10, max_solution_len=50)
+    env = SokobanEnv(level, max_steps=80)
+    for a in solution:
+        env.step(a)
+    assert env.solved
+    assert render(level).shape == (64, 64, 3)
+
+
 def test_scripts_run(tmp_path):
     root = Path(__file__).resolve().parents[1]
     env_cmd = dict(PYTHONPATH=str(root))

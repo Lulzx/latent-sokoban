@@ -37,24 +37,35 @@ def main() -> None:
     parser.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     parser.add_argument("--max-episodes", type=int, default=None,
                         help="cap episodes per split (debugging only)")
+    parser.add_argument("--call-cap", type=int, default=256,
+                        help="max counted dynamics calls per action (0 = uncapped)")
+    parser.add_argument("--no-strict-calls", action="store_true",
+                        help="report call-cap violations without failing episodes")
     parser.add_argument("--out", default=None, help="write results JSON here")
     args = parser.parse_args()
 
-    report: dict = {"agent": args.agent, "seeds": args.seeds, "splits": {}}
+    call_cap = args.call_cap or None
+    report: dict = {"agent": args.agent, "seeds": args.seeds,
+                    "call_cap": call_cap, "strict_calls": not args.no_strict_calls,
+                    "splits": {}}
     for split_path in args.splits:
         per_seed = []
         for seed in args.seeds:
             agent = load_agent(args.agent)
             summary, _ = evaluate_split(agent, split_path, seed=seed,
-                                        max_episodes=args.max_episodes)
+                                        max_episodes=args.max_episodes,
+                                        call_cap=call_cap,
+                                        strict_calls=not args.no_strict_calls)
             per_seed.append(summary)
         name = per_seed[0].split
         metrics = {}
         for field in ("success_rate", "move_efficiency", "avg_plan_time_ms",
-                      "deadlock_rate", "avg_steps_solved"):
+                      "avg_model_calls", "deadlock_rate", "avg_steps_solved"):
             values = [getattr(s, field) for s in per_seed]
             metrics[field] = float(np.mean(values))
             metrics[field + "_std"] = float(np.std(values))
+        metrics["max_model_calls"] = max(s.max_model_calls for s in per_seed)
+        metrics["call_violations"] = sum(s.call_violations for s in per_seed)
         metrics["episodes"] = per_seed[0].episodes
         report["splits"][name] = metrics
 
@@ -64,6 +75,9 @@ def main() -> None:
               f"± {metrics['success_rate_std']:.3f}")
         print(f"  move efficiency  {metrics['move_efficiency']:.3f}")
         print(f"  plan time        {metrics['avg_plan_time_ms']:.1f} ms/action")
+        print(f"  model calls      {metrics['avg_model_calls']:.0f}/action "
+              f"(max {metrics['max_model_calls']}, "
+              f"violations {metrics['call_violations']})")
         print(f"  deadlock rate    {metrics['deadlock_rate']:.3f}")
 
     if args.out:

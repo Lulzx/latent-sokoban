@@ -27,18 +27,24 @@ import numpy as np
 from latent_sokoban.levels import generate_deadlock_level, generate_level
 from latent_sokoban.render import random_theme
 
+# Official configuration is 8x8 with 3 boxes: large enough that the
+# reachable state space (~250k states) cannot be exhausted within the
+# 256-calls-per-action planning budget, so search must be learned-heuristic
+# guided. Split W is the 6x6 warmup used during the baseline round only.
 SPLITS = {
     # split: (size, n_boxes, wall_density, min_len, max_len, themed, deadlock, max_steps)
-    "A": dict(size=6, n_boxes=1, wall_density=0.12, min_len=4, max_len=25,
+    "W": dict(size=6, n_boxes=1, wall_density=0.12, min_len=4, max_len=25,
               themed=False, deadlock=False, max_steps=40),
-    "B": dict(size=6, n_boxes=1, wall_density=0.12, min_len=4, max_len=25,
-              themed=True, deadlock=False, max_steps=40),
-    "C": dict(size=7, n_boxes=1, wall_density=0.14, min_len=8, max_len=35,
-              themed=False, deadlock=False, max_steps=40),
-    "D": dict(size=6, n_boxes=1, wall_density=0.18, min_len=4, max_len=30,
-              themed=False, deadlock=True, max_steps=40),
-    "E": dict(size=7, n_boxes=2, wall_density=0.10, min_len=6, max_len=40,
-              themed=False, deadlock=False, max_steps=60),
+    "A": dict(size=8, n_boxes=3, wall_density=0.10, min_len=10, max_len=50,
+              themed=False, deadlock=False, max_steps=80),
+    "B": dict(size=8, n_boxes=3, wall_density=0.10, min_len=10, max_len=50,
+              themed=True, deadlock=False, max_steps=80),
+    "C": dict(size=10, n_boxes=3, wall_density=0.10, min_len=15, max_len=70,
+              themed=False, deadlock=False, max_steps=120),
+    "D": dict(size=8, n_boxes=3, wall_density=0.14, min_len=8, max_len=50,
+              themed=False, deadlock=True, max_steps=80),
+    "E": dict(size=10, n_boxes=5, wall_density=0.08, min_len=15, max_len=90,
+              themed=False, deadlock=False, max_steps=160),
 }
 
 
@@ -71,7 +77,8 @@ def generate_split(name: str, n: int, seed: int) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--split", choices=sorted(SPLITS), help="single split to generate")
-    parser.add_argument("--all", action="store_true", help="generate splits A-D")
+    parser.add_argument("--all", action="store_true",
+                        help="generate warmup split W plus official splits A-D")
     parser.add_argument("--n", type=int, default=100, help="levels per split")
     parser.add_argument("--seed", type=int, default=1001)
     parser.add_argument("--out", required=True, help="output file (or directory with --all)")
@@ -80,7 +87,7 @@ def main() -> None:
     if args.all:
         out_dir = Path(args.out)
         out_dir.mkdir(parents=True, exist_ok=True)
-        for i, name in enumerate("ABCD"):
+        for i, name in enumerate("WABCD"):
             split = generate_split(name, args.n, args.seed + i)
             path = out_dir / f"split_{name.lower()}.json"
             path.write_text(json.dumps(split, indent=1))

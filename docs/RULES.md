@@ -101,16 +101,24 @@ The final evaluation is run on hidden levels.
 
 ## Shared Environment
 
-Initial environment configuration:
+Official environment configuration:
 
-* Board size: 6 × 6
-* Number of boxes: 1
-* Number of goals: 1
+* Board size: 8 × 8
+* Number of boxes: 3
+* Number of goals: 3
 * Observation size: 64 × 64 RGB
 * Actions: up, down, left, right
 * Dynamics: deterministic
-* Maximum episode length: 40 actions
+* Maximum episode length: 80 actions
 * Invalid actions: treated as no-op transitions
+
+A 6 × 6 one-box warmup configuration (Split W, 40-action limit) is used
+during the baseline round only and is never scored.
+
+Rationale: with three boxes on an 8 × 8 board the reachable state space
+(~250,000 states) cannot be enumerated within the per-action planning
+budget, so planning must be guided by a learned heuristic rather than
+exhaustive search.
 
 The final benchmark may include larger or more difficult boards.
 
@@ -190,8 +198,17 @@ Recommended final limits:
 * Maximum number of training runs: unrestricted during development
 * Final checkpoint must come from one declared training run
 * Maximum inference time: 500 milliseconds per environment action
-* Maximum planning rollouts per action: 10,000
+* Maximum learned-dynamics calls: 256 per environment action
 * Maximum memory usage: 8 GB GPU memory
+
+Dynamics-call accounting: one call = one predicted latent transition of
+one candidate state. A batched forward pass over B candidates rolled H
+steps costs B × H calls. Every planner must tick the shared CallMeter
+(latent_sokoban.agent) on each dynamics forward pass; the evaluation
+harness fails any episode whose per-action count exceeds the cap.
+Encoder passes and goal-scoring passes are free. Correct metering is
+verified by source review of the frozen submission; an unmetered or
+under-metered dynamics call is a rules violation.
 
 Hardware should be identical where possible.
 
@@ -275,16 +292,33 @@ The final agent may not:
 * Use privileged simulator state for planning
 * Modify the evaluation environment
 * Train on hidden test levels
+* Reconstruct a discrete board representation at inference time — no
+  tile classification, object detection to grid coordinates, or any
+  other module whose output is an exact symbolic board state, whether
+  hand-coded or learned
+* Perform graph or tree search over enumerated exact discrete states
+  (learned latent states are fine; a learned lookup table over decoded
+  board states is not)
+* Bypass or under-report the dynamics-call meter
 
 A symbolic solver may be used for training-data generation and evaluation analysis only.
 
+The intent of these rules: the winning system must plan in a learned
+representation under a small, audited planning budget. "Decode the image
+to a board and search it" is prohibited regardless of whether the decoder
+or the transition function was learned from data.
+
 ## Benchmark Splits
+
+### Split W: Warmup (unscored)
+
+* 6 × 6 boards, one box
+* Used only to verify baselines during Phase 2
 
 ### Split A: Standard
 
-* 6 × 6 boards
-* One box
-* One goal
+* 8 × 8 boards
+* Three boxes, three goals
 * Similar visual style to training
 * New unseen layouts
 
@@ -307,7 +341,7 @@ Purpose: test whether the encoder learned state rather than surface appearance.
 
 Possible changes:
 
-* 7 × 7 boards
+* 10 × 10 boards
 * Longer solution paths
 * Unseen room shapes
 * More obstacles
@@ -326,12 +360,11 @@ Levels include:
 
 Purpose: test planning quality and irreversible-error avoidance.
 
-### Optional Split E: Two-Box Challenge
+### Optional Split E: Five-Box Challenge
 
-* Two boxes
-* Two goals
-* Small boards
-* Longer horizons
+* 10 × 10 boards
+* Five boxes, five goals
+* Longer horizons (160-action limit)
 
 This split should be considered a bonus round unless both competitors agree to make it official.
 
@@ -615,12 +648,12 @@ To begin immediately, use:
 
 * Fixed Dataset Mode
 * Weekly Reveal Mode
-* 6 × 6 one-box Sokoban
+* 8 × 8 three-box Sokoban (6 × 6 one-box warmup for the baseline round)
 * 20-million-parameter limit
 * 12 GPU-hour training budget
 * 500 ms inference limit
-* 10,000 planning rollouts per action
-* 40-action episode limit
+* 256 counted dynamics calls per action
+* 80-action episode limit
 * Three evaluation seeds
 * Four official benchmark splits
 * Seven-day research round
