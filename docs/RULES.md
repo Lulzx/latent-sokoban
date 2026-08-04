@@ -1,11 +1,12 @@
 # Latent Sokoban Challenge
 
-A two-person research competition to build the best pixel-based latent world model for Sokoban.
+An open benchmark for pixel-based latent world models. Anyone can enter:
+register a name, evaluate against the hidden set through the public API at
+[sokoban.lulzx.space](https://sokoban.lulzx.space), and appear on the
+leaderboard.
 
-## Competitors
-
-* Competitor A: ____________________
-* Competitor B: ____________________
+These rules define what counts as a valid entry. They are published in
+advance and applied identically to every submission.
 
 ## Objective
 
@@ -35,44 +36,30 @@ The competition should reward:
 * Original technical ideas
 * Reproducible experiments
 
-Both competitors must use the same evaluation environment, datasets, compute limits, and scoring script.
+Every entrant uses the same evaluation environment, datasets, compute
+limits, and scoring script. None of it is negotiated per submission.
 
-## Timeline
+## Getting to a submission
 
-### Phase 1: Shared Infrastructure
+Submissions are rolling: there is no fixed round, and you can evaluate
+against the live API whenever you are ready. The path below is a suggested
+order of work, not a schedule you have to keep.
 
-Duration: 3 days
+### Reproduce the baseline
 
-Build together:
-
-* Sokoban environment
-* Image renderer
-* Dataset format
-* Level generator
-* Evaluation script
-* Shared baseline
-* Hidden test-set generation process
-
-No competitive scoring occurs during this phase.
-
-### Phase 2: Baseline Round
-
-Duration: 4 days
-
-Both competitors independently reproduce the shared baseline.
-
-The goal is to verify that:
+Run the shared baseline before introducing your own ideas, and confirm
+that:
 
 * Training runs successfully
 * Representations do not collapse
 * The planner can execute latent rollouts
-* Evaluation is deterministic and fair
+* Evaluation is deterministic
 
-### Phase 3: Research Round
+This catches a broken pipeline before it looks like a bad research result.
 
-Duration: 7 to 14 days
+### Do the research
 
-Each competitor may independently improve:
+Areas open to improvement:
 
 * Encoder architecture
 * Dynamics model
@@ -84,11 +71,9 @@ Each competitor may independently improve:
 * Dataset sampling
 * Training curriculum
 
-### Phase 4: Final Evaluation
+### Submit
 
-Duration: 1 day
-
-Each competitor submits:
+An entry consists of:
 
 * Frozen source code
 * Configuration files
@@ -112,8 +97,8 @@ Official environment configuration:
 * Maximum episode length: 80 actions
 * Invalid actions: treated as no-op transitions
 
-A 6 × 6 one-box warmup configuration (Split W, 40-action limit) is used
-during the baseline round only and is never scored.
+A 6 × 6 one-box warmup configuration (Split W, 40-action limit) exists for
+verifying a baseline runs. It is never scored.
 
 Rationale: with three boxes on an 8 × 8 board the reachable state space
 (~250,000 states) cannot be enumerated within the per-action planning
@@ -143,7 +128,7 @@ The agent may not receive:
 
 ## Training Data
 
-Both competitors receive the same base dataset.
+Every entrant uses the same base dataset.
 
 Recommended composition:
 
@@ -162,32 +147,26 @@ The shared dataset should include:
 * Invalid actions
 * Repeated observations
 
-Each competitor may generate additional training data only under the agreed data-budget rules.
+Additional training data may be generated only under the data-budget rules below.
 
 ## Data Budget
 
-Choose one competition mode before starting.
+Declare which mode your entry used. Both are valid; the mode is reported
+alongside the result so entries are compared like for like.
 
 ### Fixed Dataset Mode
 
-Each competitor may train only on the shared dataset.
+Train only on the shared dataset.
 
 This mode best isolates architectural and algorithmic improvements.
 
 ### Fixed Environment-Steps Mode
 
-Each competitor may generate additional data, but total environment interactions are capped.
-
-Recommended limit:
+Generate additional data, with total environment interactions capped at:
 
 * 2 million transition samples
 
 Every generated transition counts toward the limit.
-
-Selected mode:
-
-* [ ] Fixed Dataset Mode
-* [ ] Fixed Environment-Steps Mode
 
 ## Compute Budget
 
@@ -253,11 +232,11 @@ The shared baseline should contain:
 * Euclidean latent goal distance
 * Model-predictive control with replanning after every action
 
-Both competitors must demonstrate that the baseline runs before introducing custom improvements.
+Verify the baseline runs before introducing custom improvements.
 
 ## Allowed Modifications
 
-Competitors may change:
+Entries may change:
 
 * CNN or Vision Transformer encoder
 * Latent dimensionality
@@ -366,22 +345,22 @@ Purpose: test planning quality and irreversible-error avoidance.
 * Five boxes, five goals
 * Longer horizons (160-action limit)
 
-This split should be considered a bonus round unless both competitors agree to make it official.
+This split is an unscored bonus and does not contribute to the final
+score.
 
 ## Hidden Test Set
 
-The final test set must remain unseen until evaluation.
+The hidden set is generated once from a secret seed and held by the
+evaluation server. Levels never leave it: agents receive rendered frames
+only, and no entrant, including the maintainer, plays them directly.
 
-Recommended procedure:
+Because generation is fully determined by `(script, constraints, seed)`,
+the seed alone is a commitment to the exact levels. Publishing it when a
+round closes lets anyone regenerate the set and verify what was scored,
+without the levels having been visible while the round was open.
 
-1. Write and freeze the level-generation script.
-2. Agree on generation constraints.
-3. Generate levels using a secret random seed.
-4. Store the seed in a password-protected archive.
-5. Do not inspect generated levels before final evaluation.
-6. Reveal the password only after both submissions are frozen.
-
-Alternatively, ask a trusted third person to generate and hold the test set.
+Rotating the seed replaces the whole set and invalidates every prior score,
+so it is done only between rounds, and announced.
 
 ## Evaluation Metrics
 
@@ -476,29 +455,11 @@ Ties are resolved in this order:
 4. Lower average planning time
 5. Smaller model
 6. Fewer training samples
-7. Best-of-five live Sokoban match
-
-## Live Final
-
-For the live final:
-
-1. Each competitor selects three unseen generated levels.
-2. Neither competitor sees the levels beforehand.
-3. Models alternate solving levels.
-4. Each model gets one attempt per level.
-5. The evaluation screen displays:
-
-   * Current state
-   * Goal state
-   * Selected action
-   * Imagined action sequence
-   * Planning time
-   * Current goal distance
-6. No code changes are allowed during the final.
+7. Earlier submission
 
 ## Bonus Awards
 
-These awards do not affect the main score unless agreed beforehand.
+These awards are editorial and do not affect the score.
 
 ### Best Research Idea
 
@@ -520,33 +481,14 @@ Awarded when a model executes a uniquely confident and catastrophic box push.
 
 Awarded for the clearest explanation of experiments, results, and failures.
 
-## Experiment Sharing Rules
+## Publication
 
-During the research round, competitors may choose one of these modes.
+Entrants are encouraged but not required to publish what they learned.
+Negative results are especially welcome: the two findings recorded in the
+project README came from instrumenting the baseline, and both saved work
+that others would otherwise have repeated.
 
-### Fully Independent
-
-No sharing of results, code, or technical ideas until final submission.
-
-### Weekly Reveal
-
-At the end of each week, both competitors share:
-
-* Best score
-* One successful idea
-* One failed idea
-* Current model size
-* Current planning speed
-
-### Open Research
-
-Both competitors may discuss discoveries, but code remains separate.
-
-Selected mode:
-
-* [ ] Fully Independent
-* [ ] Weekly Reveal
-* [ ] Open Research
+Nothing here restricts what you may publish or when. Your code is yours.
 
 ## Submission Format
 
@@ -568,7 +510,7 @@ The results file should contain:
 
 ```json
 {
-  "competitor": "name",
+  "entrant": "name",
   "git_commit": "commit-hash",
   "random_seed": 42,
   "parameter_count": 0,
@@ -582,7 +524,7 @@ The results file should contain:
 
 ## Required Technical Report
 
-Each competitor submits a short report covering:
+Each entry includes a short report covering:
 
 1. Model architecture
 2. Training objective
@@ -597,57 +539,46 @@ Each competitor submits a short report covering:
 
 Recommended length: two to four pages.
 
-## Shared Leaderboard
+## Leaderboard
 
-| Competitor   | Standard Success | Generalization | Deadlock Success | Move Efficiency | Planning Time | Parameters | Final Score |
-| ------------ | ---------------: | -------------: | ---------------: | --------------: | ------------: | ---------: | ----------: |
-| Competitor A |                - |              - |                - |               - |             - |          - |           - |
-| Competitor B |                - |              - |                - |               - |             - |          - |           - |
+Standings are live at
+[sokoban.lulzx.space/leaderboard](https://sokoban.lulzx.space/leaderboard),
+ranked by success rate over the hidden set, with move efficiency and then
+deadlock rate as tie-breaks. Each entrant's best scorecard is shown, so a
+bad run cannot displace a good one.
 
 ## Dispute Resolution
 
-Any disagreement about fairness should be resolved before final evaluation.
+Raise anything ambiguous before submitting rather than after scoring.
 
 When a rule is ambiguous:
 
-1. Prefer the interpretation that gives neither competitor an advantage.
-2. Document the decision.
-3. Apply the decision equally to both submissions.
-4. Do not change scoring rules after seeing final results.
+1. Prefer the interpretation that advantages no particular entry.
+2. Document the decision in the open, so it applies to everyone.
+3. Apply it identically to every submission, including ones already scored.
+4. Do not change scoring rules after seeing results.
 
-## Competition Agreement
+Decisions are made by the benchmark maintainer and recorded in this file's
+history, so the rule that applied to any past score can be reconstructed.
 
-By signing below, both competitors agree to:
+## Entry Agreement
 
-* Follow the same evaluation rules
-* Avoid inspecting hidden test levels
-* Accurately report compute and data use
-* Freeze submissions before evaluation
-* Accept the final scoring procedure
-* Share results and lessons after the competition
+By submitting a result, you confirm that your entry:
 
-Competitor A:
+* Follows these evaluation rules
+* Did not inspect or train on hidden test levels
+* Accurately reports compute and data use
+* Was frozen before evaluation
+* Meters dynamics calls honestly
 
-Name: ____________________
-
-Signature: ____________________
-
-Date: ____________________
-
-Competitor B:
-
-Name: ____________________
-
-Signature: ____________________
-
-Date: ____________________
+Misreporting is the one thing that cannot be checked automatically, which
+is why it is the one thing stated as a condition of entry.
 
 ## Recommended Default Settings
 
 To begin immediately, use:
 
 * Fixed Dataset Mode
-* Weekly Reveal Mode
 * 8 × 8 three-box Sokoban (6 × 6 one-box warmup for the baseline round)
 * 20-million-parameter limit
 * 12 GPU-hour training budget
@@ -658,9 +589,9 @@ To begin immediately, use:
 * Four official benchmark splits
 * Seven-day research round
 
-## First Shared Milestone
+## Before you submit
 
-Before competing, both competitors must successfully run:
+Confirm the shared tooling runs end to end:
 
 ```bash
 python scripts/generate_dataset.py --out data/train --episodes 2000 --seed 13
@@ -675,4 +606,4 @@ The shared baseline should achieve:
 * At least occasional success on simple levels
 * Identical evaluation results when run from the same checkpoint
 
-Once this milestone is complete, the competition officially begins.
+Once that holds, your setup matches the one every entry is scored on.

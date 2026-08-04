@@ -29,9 +29,9 @@ horizons. This benchmark deliberately lives in that regime, from pixels.
 (player hidden), a Split-B visual-generalization theme, a 10×10 Split-C
 board. All observations are 64×64 RGB.*
 
-This repo is the neutral ground both competitors build on: same environment,
+This repo is the neutral ground every entry is built on: same environment,
 same dataset, same levels, same scoring script. Models and planners live in
-each competitor's own repo.
+each entrant's own repo.
 
 ## The hidden set
 
@@ -109,7 +109,7 @@ Board art is [Kenney's Sokoban pack](https://www.kenney.nl/assets/sokoban)
 | Benchmark splits | `scripts/generate_levels.py` | Warmup W + splits A–D (+ optional E) |
 | Hidden set | `scripts/generate_hidden.py` | Builds the 100-level ramp from a secret seed |
 | Evaluation harness | `latent_sokoban/evaluation.py`, `scripts/evaluate.py` | Deterministic, multi-seed, enforces the dynamics-call budget |
-| Agent interface | `latent_sokoban/agent.py` | The only contract competitors implement, including the `CallMeter` |
+| Agent interface | `latent_sokoban/agent.py` | The only contract an entry implements, including the `CallMeter` |
 | Shared baseline | `baseline/` | CNN encoder, 128-d latent, residual MLP dynamics, VICReg-style regularization, beam-search MPC (needs PyTorch) |
 | Evaluation API and site | `server/` | FastAPI app, landing page, leaderboard, game, docs hosting |
 | Play level builder | `scripts/build_play_levels.py` | Parses the classic ASCII set into JSON for `/play` |
@@ -197,7 +197,7 @@ reachable; the closing tiers are out of reach of anything published. A
 benchmark where every entrant scores zero everywhere gives no gradient to
 improve against.
 
-Two findings from instrumenting this baseline, so competitors don't
+Two findings from instrumenting this baseline, so nobody has to
 rediscover them:
 
 - **Plan short, replan often.** One-step prediction is sharp (open-loop
@@ -250,16 +250,17 @@ perturbed) and the ASCII levels for reproducibility. See
 
 ## Hidden test set protocol
 
-1. Freeze this repo at an agreed tag; agree on generation constraints.
-2. One competitor (or a trusted third party) runs `scripts/generate_hidden.py`
-   with a **secret seed**.
-3. Store the seed in a password-protected archive. Nobody inspects the
-   generated files.
-4. Reveal the password only after both submissions are frozen, regenerate,
-   and run the evaluation on both submissions on the same machine.
+The hidden set is generated once from a secret seed and held by the
+evaluation server. Levels never leave it: agents receive rendered frames
+only, and nobody plays them directly.
 
 Because generation is fully determined by `(script, constraints, seed)`, the
-seed alone is a commitment to the exact test levels.
+seed alone is a commitment to the exact test levels. Publishing the seed when
+a round closes lets anyone regenerate the set and verify what was scored,
+without the levels having been visible while the round was open.
+
+Rotating the seed replaces the whole set and invalidates every prior score,
+so it happens only between rounds, and is announced.
 
 ## Running the server
 

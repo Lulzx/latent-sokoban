@@ -4,7 +4,7 @@ An agent sees ONLY what the competition rules allow: the current board
 image, the goal board image, and its own action history. The harness
 never passes symbolic state.
 
-Competitors implement Agent in their own repos and point evaluate.py at
+Entrants implement Agent in their own repos and point evaluate.py at
 it with --agent path.to.module:ClassName. The class is constructed with
 no arguments (load your checkpoint in __init__ or reset()).
 

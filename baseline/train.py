@@ -6,7 +6,7 @@ Usage:
         --steps 5000 --seed 13
 
 Watch latent_std in the logs: it collapsing toward 0 means the variance
-regularizer lost — the representation is dead and planning cannot work.
+regularizer lost: the representation is dead and planning cannot work.
 """
 
 from __future__ import annotations

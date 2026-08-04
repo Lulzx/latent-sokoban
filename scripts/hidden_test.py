@@ -6,13 +6,13 @@ constraints, seed), committing to a secret seed IS committing to the
 exact test levels, so nothing needs to be generated, stored, or resisted
 peeking at until reveal day.
 
-    # 1. Commit day (done by either competitor, or a third party):
+    # 1. Commit day (done by whoever holds the seed):
     python scripts/hidden_test.py commit --seed 987654321
     #    prompts for a password; writes hidden_seed.enc + hidden_commitment.json
     #    Check BOTH files into the repo. Forget the seed. Keep the password
-    #    somewhere neither competitor will open early.
+    #    somewhere nobody will open early.
 
-    # 2. Reveal day (after both submissions are frozen):
+    # 2. Reveal day (after submissions are frozen):
     python scripts/hidden_test.py reveal
     #    prompts for the password; verifies the commitment hash, prints the
     #    seed, and generates the final splits into levels/final/

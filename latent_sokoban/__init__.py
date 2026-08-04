@@ -1,7 +1,7 @@
 """Shared infrastructure for the Latent Sokoban Challenge.
 
 Environment, renderer, level generator, solver, dataset generator and
-evaluation harness. This package is competition-neutral: both competitors
+evaluation harness. This package is entry-neutral: everyone
 build their agents on top of exactly this code.
 """
 

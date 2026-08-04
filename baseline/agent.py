@@ -6,7 +6,7 @@ action. Every dynamics forward pass is counted on the CallMeter.
 
 The planning horizon is deliberately short (default 3): the baseline is
 trained with a ONE-step loss, and measured open-loop drift reaches the
-typical start-to-goal latent distance by ~6 imagined steps — long beams
+typical start-to-goal latent distance by ~6 imagined steps, so long beams
 score noise. Short-horizon beams plus replanning after every action is
 the right operating point for this model; extending usable horizon (e.g.
 multi-step rollout losses) is exactly the research-round headroom.

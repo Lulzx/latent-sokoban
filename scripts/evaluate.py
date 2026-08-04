@@ -2,7 +2,7 @@
 """Official evaluation script.
 
 Runs an agent over one or more benchmark splits, averages across
-evaluation seeds, and writes results.json. Both competitors are scored by
+evaluation seeds, and writes results.json. Every entry is scored by
 this exact script on the same split files.
 
 Usage:

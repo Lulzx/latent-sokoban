@@ -11,7 +11,7 @@ Usage:
 
 Hidden test set protocol: freeze this script (git tag), agree on the
 constraints, then one run per split with a SECRET seed. Store the seed in
-a password-protected archive; reveal it only after both submissions are
+a password-protected archive; reveal it only after submissions are
 frozen. Do not open the generated files before final evaluation.
 """
 

@@ -17,7 +17,7 @@ A-D) and computes the 100-point competition score:
                                --reproducible after rerunning the
                                submission from its README
 
-Both competitors are scored by this exact script on the same results
+Every entry is scored by this exact script on the same results
 format. Usage:
 
     python scripts/score.py results.json --reproducible --out score.json
