@@ -431,6 +431,24 @@ def leaderboard() -> JSONResponse:
     })
 
 
+FAVICON_SVG = (
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>"
+    "<rect width='16' height='16' fill='#ded6ba'/>"
+    "<rect x='1.5' y='1.5' width='13' height='13' fill='none'"
+    " stroke='#c43c3c' stroke-width='2'/>"
+    "<rect x='4.5' y='4.5' width='7' height='7' fill='#b07a36'"
+    " stroke='#785020' stroke-width='1.5'/></svg>"
+)
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon():
+    from fastapi.responses import Response
+    return Response(FAVICON_SVG, media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     return (ROOT / "index.html").read_text()
