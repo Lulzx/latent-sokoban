@@ -12,7 +12,10 @@ requires-python = ">=3.10"
 dependencies = ["numpy>=1.24"]
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+# httpx is what starlette's TestClient drives the API tests through, so it
+# belongs with the server rather than with the pure-numpy core.
+dev = ["pytest>=7", "fastapi>=0.110", "httpx>=0.27"]
+server = ["fastapi>=0.110", "uvicorn>=0.29"]
 baseline = ["torch>=2.1"]
 # mkdocs is pinned below 2.0: that release drops the plugin system entirely,
 # which would take mkdocstrings and the Material theme with it.
