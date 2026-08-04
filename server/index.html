@@ -87,7 +87,19 @@
     box-shadow: inset 0 0 0 4px var(--crate-edge), inset 0 0 0 6px var(--crate);
     border-radius: 2px;
   }
-  .crate.home { background: #cea046; box-shadow: inset 0 0 0 4px #8f6a20; }
+  .crate.home {
+    background: #cea046;
+    box-shadow: inset 0 0 0 4px var(--goal), inset 0 0 0 6px #cea046,
+                0 0 14px 3px rgba(196, 60, 60, .5);
+    animation: land .55s steps(3);
+  }
+  @keyframes land {
+    0% { filter: brightness(1.7); }
+    100% { filter: brightness(1); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .crate.home { animation: none; }
+  }
   .dot {
     width: calc(var(--cell) * .6); height: calc(var(--cell) * .6);
     background: var(--player); border-radius: 50%;
