@@ -40,6 +40,8 @@ theme:
     - search.highlight
     - content.code.copy
     - content.action.edit
+  favicon: images/favicon.png
+  logo: images/favicon.png
   icon:
     repo: fontawesome/brands/github
 
