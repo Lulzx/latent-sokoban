@@ -95,11 +95,11 @@ The benchmark is deliberately sized so that brute force loses:
 | --- | --- |
 | [![Leaderboard](docs/images/leaderboard.png)](https://sokoban.lulzx.space/leaderboard) | [![The browser game](docs/images/play.png)](https://sokoban.lulzx.space/play) |
 
-`/play` runs 52 classic levels from
-[morenod/sokoban](https://github.com/morenod/sokoban) (MIT), ordered easiest
-first, with keyboard, swipe and on-screen controls, unlimited undo, and
-progress kept in local storage. These are **not** the benchmark levels; the
-hidden set is separate and stays on the server.
+`/play` runs the 50-level Thinking Rabbit **Original** collection, sourced
+from [davidjoffe/sokoban](https://github.com/davidjoffe/sokoban), in its
+original order. It has keyboard, swipe and on-screen controls, unlimited
+undo, and progress kept in local storage. These are **not** the benchmark
+levels; the hidden set is separate and stays on the server.
 
 Board art is [Kenney's Sokoban pack](https://www.kenney.nl/assets/sokoban)
 (CC0).
@@ -190,13 +190,21 @@ python baseline/train.py --data data/warmup --out baseline/checkpoint.pt --steps
 python scripts/evaluate.py --agent baseline.agent:BaselineAgent --splits levels/eval_w.json --seeds 0 1 2
 ```
 
-Measured results (5,000 training steps, ~9 min on an M-series MPS; 50
-warmup levels / 20 Split-A levels, 3 evaluation seeds):
+Measured results (training seed 13, 5,000 steps, ~11 min on an M-series
+MPS; 50 warmup levels / 20 Split-A levels, 3 evaluation seeds):
 
-| Agent | Split W (6×6, 1 box) | Split A (8×8, 3 boxes) | Plan time | Calls/action |
-| --- | --- | --- | --- | --- |
-| Random | 4% | 0% | - | 0 |
-| Baseline | **12%** | **0%** | 3.6 ms | 84 |
+| Agent | Split W (6×6, 1 box) | Split A (8×8, 3 boxes) | Deadlocks (W / A) | Plan time | Calls/action |
+| --- | --- | --- | --- | --- | --- |
+| Random | 4% | 0% | - | - | 0 |
+| Baseline | **28%** | **0%** | 34% / 50% | 4-5 ms | 84 |
+
+Split W was 12% until the VICReg term was found to be running at half
+weight with the next observation's contribution discarded (a tuple `+`
+that concatenated instead of adding). Fixing it, with nothing else
+changed, took Split W from 12% to 28% and move efficiency on solved levels
+from 0.29 to 0.66. Split A stays at zero, but its deadlock rate falls from
+70% to 50%. One training run per condition at the shared seed 13; the
+rulebook asks for three seeds before treating a number as settled.
 
 This is also what calibrates the hidden set's ramp. Tier 1 (8×8, one crate)
 sits between splits W and A, so the opening levels are not free but are
@@ -205,7 +213,11 @@ benchmark where every entrant scores zero everywhere gives no gradient to
 improve against.
 
 Two findings from instrumenting this baseline, so nobody has to
-rediscover them:
+rediscover them. Both were measured before the regularizer fix, so treat
+the specific numbers as pre-fix: the shapes of the arguments should hold,
+but a better-conditioned latent space plausibly moves the drift horizon
+and the oracle comparison, and the 16% below is no longer above the
+baseline it was meant to bound.
 
 - **Plan short, replan often.** One-step prediction is sharp (open-loop
   drift after 1 imagined step ≈ one true transition), but drift reaches

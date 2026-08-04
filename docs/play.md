@@ -29,13 +29,9 @@ Agents get one attempt per level and live with their mistakes.
 
 ## The level set
 
-52 levels from [morenod/sokoban](https://github.com/morenod/sokoban) (MIT),
-ordered easiest first. Level 1 is a single push; level 52 has 240 crates on
-a 27×27 board.
-
-Ordering is by crate count, then floor area. Actually solving each level to
-rank it is intractable for the largest ones, so this is a structural proxy:
-within a given crate count it will not always match how hard a level feels.
+The 50-level Thinking Rabbit **Original** collection, sourced from the
+default pack in [davidjoffe/sokoban](https://github.com/davidjoffe/sokoban),
+and presented in its original order.
 
 !!! note "These are not the benchmark levels"
 

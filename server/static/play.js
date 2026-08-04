@@ -13,9 +13,10 @@
 (function () {
   "use strict";
 
-  // Bumped to v2 when the levels were reordered by difficulty: progress is
-  // keyed by level index, so old saves would mark the wrong levels solved.
-  var STORE = "latent-sokoban.play.v2";
+  // Bumped to v3 when /play switched to the original Thinking Rabbit set:
+  // progress is keyed by level index, so old saves would mark unrelated
+  // levels solved.
+  var STORE = "latent-sokoban.play.v3";
   var DIRS = {
     up:    [-1, 0], down:  [1, 0],
     left:  [0, -1], right: [0, 1]

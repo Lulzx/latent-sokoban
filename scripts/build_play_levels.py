@@ -12,10 +12,12 @@ from the player through non-wall cells separates them, so the renderer can
 draw floor only where floor actually exists and leave the rest transparent
 instead of painting a ragged rectangle of tiles.
 
-Source levels: https://github.com/morenod/sokoban (MIT).
+The bundled input is the 50-level Thinking Rabbit "Original" collection,
+transcribed from the default level pack in davidjoffe/sokoban.
 
 Usage:
-    python scripts/build_play_levels.py --in levels --out server/static/play-levels.json
+    python scripts/build_play_levels.py \
+        --in levels/original.txt --out server/static/play-levels.json
 """
 
 from __future__ import annotations
@@ -137,25 +139,13 @@ def main() -> None:
             skipped.append((i, f"{len(lv['crates'])} crates vs {len(lv['goals'])} goals"))
             continue
         lv["source_n"] = i
+        lv["n"] = i
         out.append(lv)
 
-    # Order easiest first. The source file is broadly a ramp already, but it
-    # ends with two throwaway levels (1 crate on 3 floor tiles, and 5 crates
-    # on 24) that land after a 240-crate monster, so playing straight through
-    # falls off a cliff at the end.
-    #
-    # True difficulty would need each level solved, which is intractable for
-    # the largest ones here, so this sorts on structure instead: crate count
-    # first, since each extra crate multiplies the state space and the ways
-    # to deadlock, then floor area as a tie-break. It is a proxy, and within
-    # a crate count it will not always agree with how hard a level feels.
-    out.sort(key=lambda lv: (len(lv["crates"]), len(lv["floor"])))
-    for n, lv in enumerate(out, 1):
-        lv["n"] = n
-
     Path(args.out).write_text(json.dumps({
-        "source": "https://github.com/morenod/sokoban",
-        "license": "MIT",
+        "collection": "Original",
+        "author": "Thinking Rabbit",
+        "source": "https://github.com/davidjoffe/sokoban/blob/master/data/sokoban/levels/default.txt",
         "levels": out,
     }))
     sizes = [(lv["w"], lv["h"]) for lv in out]

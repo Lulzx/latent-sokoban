@@ -307,3 +307,32 @@ def test_scripts_run(tmp_path):
     report = json.loads((tmp_path / "results.json").read_text())
     assert "split_A" in report["splits"] or "split_a" in report["splits"] \
         or list(report["splits"])
+
+
+def test_baseline_regularizer_averages_both_latents():
+    """The anti-collapse term must cover the next observation too.
+
+    `_var_cov_loss(z) + _var_cov_loss(z_next)` returns tuples, so + once
+    concatenated them; indexing [0] and [1] kept z's terms at half weight
+    and dropped z_next's entirely, quietly halving var_coef.
+    """
+    torch = pytest.importorskip("torch", reason="baseline extras not installed")
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from baseline.model import WorldModel, _var_cov_loss
+
+    torch.manual_seed(0)
+    model = WorldModel()
+    obs = torch.rand(32, 3, 64, 64)
+    nxt = torch.rand(32, 3, 64, 64)
+    act = torch.randint(0, 4, (32,))
+
+    with torch.no_grad():
+        z, z_next = model.encoder(obs), model.encoder(nxt)
+        var_z, cov_z = _var_cov_loss(z)
+        var_n, cov_n = _var_cov_loss(z_next)
+        out = model.loss(obs, act, nxt)
+
+    assert torch.allclose(out["var"], (var_z + var_n) / 2)
+    assert torch.allclose(out["cov"], (cov_z + cov_n) / 2)
+    # the old behaviour, pinned so it cannot come back
+    assert not torch.allclose(out["var"], var_z / 2)

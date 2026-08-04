@@ -69,8 +69,13 @@ class WorldModel(nn.Module):
         z_next = self.encoder(next_obs)
         pred = self.dynamics(z, action)
         pred_loss = F.mse_loss(pred, z_next)
-        reg = _var_cov_loss(z) + _var_cov_loss(z_next)
-        var_loss, cov_loss = reg[0] / 2, reg[1] / 2
+        # Average the two terms. `_var_cov_loss(z) + _var_cov_loss(z_next)`
+        # reads like it does this, but those are tuples, so + concatenated
+        # them into a 4-tuple and taking [0] and [1] kept only z's terms at
+        # half weight, silently halving var_coef and dropping z_next.
+        var_z, cov_z = _var_cov_loss(z)
+        var_n, cov_n = _var_cov_loss(z_next)
+        var_loss, cov_loss = (var_z + var_n) / 2, (cov_z + cov_n) / 2
         total = pred_loss + var_coef * var_loss + cov_coef * cov_loss
         return {"loss": total, "pred": pred_loss.detach(),
                 "var": var_loss.detach(), "cov": cov_loss.detach(),

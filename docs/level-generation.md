@@ -103,7 +103,7 @@ learning structure falls over on it.
 
 ## Calibration
 
-The reference baseline scores 12% on split W and 0% on split A. Tier 1 of
+The reference baseline scores 28% on split W and 0% on split A. Tier 1 of
 the hidden set sits between the two: same single crate as W, but on the
 larger 8×8 board. So the opening levels are not free, and the closing tiers
 are, for now, out of reach of anything published. That is deliberate. A
