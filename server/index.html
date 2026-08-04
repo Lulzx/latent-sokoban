@@ -141,8 +141,10 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
   const goalPos = [2, 3];
   for (let r = 0; r < 6; r++) for (let c = 0; c < W; c++) {
     const d = document.createElement("div");
-    d.className = "cell" + ((r + c) % 2 ? " alt" : "");
-    if (ascii[r][c] === "#") d.className = "cell wall";
+    d.className = "cell";
+    /* every wall on this little board is the boundary, so it all gets the
+       red brick; interior obstacles would keep the plain wall class */
+    if (ascii[r][c] === "#") d.className = "cell wall outer";
     if (r === goalPos[0] && c === goalPos[1]) d.classList.add("goalcell");
     board.appendChild(d);
   }
@@ -155,24 +157,29 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
   /* states: [playerR, playerC, crateR, crateC] — every step is one legal
      Sokoban move: walk up beside the crate, then push it right onto the
      goal. The wrap-around back to the start snaps (no transition). */
+  /* the 5th field is which way the player faces on arrival */
   const states = [
-    [4, 2, 2, 2],   /* start */
-    [4, 1, 2, 2],   /* left  */
-    [3, 1, 2, 2],   /* up    */
-    [2, 1, 2, 2],   /* up    */
-    [2, 2, 2, 3],   /* push right: crate lands on the goal */
-    [2, 2, 2, 3],   /* hold the solve */
+    [4, 2, 2, 2, "up"],      /* start */
+    [4, 1, 2, 2, "left"],    /* left  */
+    [3, 1, 2, 2, "up"],      /* up    */
+    [2, 1, 2, 2, "up"],      /* up    */
+    [2, 2, 2, 3, "right"],   /* push right: crate lands on the goal */
+    [2, 2, 2, 3, "right"],   /* hold the solve */
   ];
   const wait = [800, 450, 450, 450, 650, 1600];
-  function place(el, r, c) {
+  function place(el, r, c, facing) {
     const cell = board.querySelector(".cell").getBoundingClientRect().width;
-    const pad = (cell - el.getBoundingClientRect().width) / 2;
-    el.style.transform = `translate(${c * cell + pad}px, ${r * cell + pad}px)`;
+    /* sprites are cell-sized, so no centring offset is needed; `left` is
+       the side sprite mirrored, appended here because this transform also
+       carries the position */
+    const flip = facing === "left" ? " scaleX(-1)" : "";
+    el.style.transform = `translate(${c * cell}px, ${r * cell}px)${flip}`;
   }
   function show(i, snap) {
     if (snap) board.classList.add("snap");
-    const [pr, pc, cr, cc] = states[i];
-    place(dot, pr, pc); place(crate, cr, cc);
+    const [pr, pc, cr, cc, facing] = states[i];
+    dot.className = "sprite dot " + facing;
+    place(dot, pr, pc, facing); place(crate, cr, cc);
     const onGoal = cr === goalPos[0] && cc === goalPos[1];
     if (!onGoal) {
       crate.classList.remove("home");       // leaving the goal: unlight now

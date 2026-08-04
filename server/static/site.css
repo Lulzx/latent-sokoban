@@ -138,52 +138,59 @@ h1 .px { color: var(--accent); }
 .lede b { color: var(--ink); font-weight: 600; }
 .sectionnote.count { margin-top: 20px; font-family: var(--mono); font-size: 13px; }
 
-/* ---- the living board ---- */
+/* ---- the board: Kenney's CC0 Sokoban art, see static/sprites/LICENSE ----
+   Shared by the hero animation and /play, so the grid takes its column
+   count from --cols rather than hard-coding one board shape. */
 .board {
   --cell: clamp(36px, 7.4vw, 50px);
+  --cols: 6;
   position: relative;
   display: grid;
-  grid-template-columns: repeat(6, var(--cell));
+  grid-template-columns: repeat(var(--cols), var(--cell));
   grid-auto-rows: var(--cell);
-  border: 6px solid var(--wall-edge);
+  background: var(--void-lift);
   box-shadow: 0 18px 44px -18px rgba(0, 0, 0, .85);
   flex: 0 0 auto;
   margin: 0 auto;
 }
-.cell { width: var(--cell); height: var(--cell); background: var(--floor); }
-.cell.alt { background: var(--floor-alt); }
-.cell.wall { background: var(--wall); box-shadow: inset 0 0 0 3px var(--wall-edge); }
-.cell.goalcell::after {
-  content: ""; display: block; width: 46%; height: 46%;
-  margin: 27% auto; outline: 4px solid var(--goal);
+.cell {
+  width: var(--cell); height: var(--cell);
+  background-size: 100% 100%; background-repeat: no-repeat;
+  background-image: url(/static/sprites/floor.png);
+}
+.cell.wall { background-image: url(/static/sprites/wall.png); }
+/* Red brick marks the boundary of the playfield; interior obstacles keep
+   the ordinary brick so the two never read as the same thing. */
+.cell.wall.outer { background-image: url(/static/sprites/wall-outer.png); }
+.cell.void { background-image: none; background-color: transparent; }
+/* The goal marker layers over the floor tile rather than replacing it. */
+.cell.goalcell {
+  background-image: url(/static/sprites/goal.png), url(/static/sprites/floor.png);
 }
 .sprite {
   position: absolute; width: var(--cell); height: var(--cell);
-  transition: transform .28s steps(4);
+  background-size: 100% 100%; background-repeat: no-repeat;
+  transition: transform .18s ease-out;
   will-change: transform;
 }
-.crate {
-  width: calc(var(--cell) * .78); height: calc(var(--cell) * .78);
-  background: var(--crate);
-  box-shadow: inset 0 0 0 4px var(--crate-edge), inset 0 0 0 6px var(--crate);
-  border-radius: 2px;
-}
-/* Home: the crate reads as seated by fill and rim, and by the shadow it
-   casts onto the floor — not by a halo hanging in the air around it. */
+.crate { background-image: url(/static/sprites/crate.png); }
 .crate.home {
-  background: #cea046;
-  box-shadow: inset 0 0 0 4px var(--goal), inset 0 0 0 6px #cea046,
-              0 3px 8px -1px rgba(70, 30, 20, .6);
-  animation: land .55s steps(3);
+  background-image: url(/static/sprites/crate-home.png);
+  animation: land .4s ease-out;
 }
+/* Only brightness — the element's transform is its board position, so
+   animating transform here would fight the move. */
 @keyframes land {
-  0% { filter: brightness(1.7); }
+  0%   { filter: brightness(1.5); }
   100% { filter: brightness(1); }
 }
-.dot {
-  width: calc(var(--cell) * .6); height: calc(var(--cell) * .6);
-  background: var(--player); border-radius: 50%;
-}
+/* Facing. `left` is `side` mirrored, and because the sprite's transform
+   carries its board position, the flip is appended there in JS. */
+.dot { background-image: url(/static/sprites/player-down.png); }
+.dot.up    { background-image: url(/static/sprites/player-up.png); }
+.dot.down  { background-image: url(/static/sprites/player-down.png); }
+.dot.left,
+.dot.right { background-image: url(/static/sprites/player-side.png); }
 .board.snap .sprite { transition: none; }
 @media (prefers-reduced-motion: reduce) {
   .sprite { transition: none; }
