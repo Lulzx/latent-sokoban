@@ -47,6 +47,9 @@ The benchmark is deliberately sized so that brute force loses:
 | Evaluation harness | `latent_sokoban/evaluation.py`, `scripts/evaluate.py` | Deterministic, multi-seed, enforces the dynamics-call budget, reports all official metrics |
 | Agent interface | `latent_sokoban/agent.py` | The only contract competitors implement, including the `CallMeter` |
 | Shared baseline | `baseline/` | The rulebook's required baseline: CNN encoder, 128-d latent, residual MLP dynamics, VICReg-style regularization, beam-search MPC (needs PyTorch) |
+| Scoring script | `scripts/score.py` | The official 100-point formula (45S+20G+10M+10P+10D+5R) computed from evaluation results |
+| Hidden-test commitment | `scripts/hidden_test.py` | Encrypt-and-commit a secret generation seed; verified reveal after submissions freeze |
+| Visualizer | `scripts/visualize.py` | Rollout contact sheets (agent or optimal solver) + per-step metadata for reports and the live final |
 
 The infrastructure's only dependency is numpy; the optional baseline adds
 PyTorch.

@@ -246,6 +246,44 @@ def test_multibox_generation_and_solving():
     assert render(level).shape == (64, 64, 3)
 
 
+def test_score_computation():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from score import compute_score, planning_speed_score
+
+    assert planning_speed_score(10) == 1.0
+    assert planning_speed_score(75) == 0.8
+    assert planning_speed_score(150) == 0.6
+    assert planning_speed_score(300) == 0.4
+    assert planning_speed_score(900) == 0.0
+
+    def split(sr, me=0.5, ms=40.0, dl=0.1):
+        return {"success_rate": sr, "move_efficiency": me,
+                "avg_plan_time_ms": ms, "deadlock_rate": dl,
+                "call_violations": 0}
+
+    results = {"agent": "x", "splits": {
+        "split_A": split(0.8), "split_B": split(0.6),
+        "split_C": split(0.4), "split_D": split(0.5)}}
+    score = compute_score(results, reproducible=True)
+    # 45*.8 + 20*.5 + 10*.5 + 10*1.0 + 10*.5 + 5*1 = 71.0
+    assert score["final_score"] == 71.0
+    assert score["components"]["G"] == 0.5
+
+    with pytest.raises(SystemExit):
+        compute_score({"splits": {"split_A": split(1.0)}}, False)
+
+
+def test_viz_helpers(tmp_path):
+    from latent_sokoban.viz import contact_sheet, write_png
+
+    frames = [np.full((64, 64, 3), v, dtype=np.uint8) for v in (0, 128, 255)]
+    sheet = contact_sheet(frames, cols=2, gap=4, scale=2)
+    assert sheet.shape == ((2 * 64 + 3 * 4) * 2, (2 * 64 + 3 * 4) * 2, 3)
+    path = tmp_path / "sheet.png"
+    write_png(path, sheet)
+    assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
 def test_scripts_run(tmp_path):
     root = Path(__file__).resolve().parents[1]
     env_cmd = dict(PYTHONPATH=str(root))
