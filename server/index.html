@@ -174,7 +174,7 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
     /* sprites are cell-sized, so no centring offset is needed; `left` is
        the side sprite mirrored, appended here because this transform also
        carries the position */
-    const flip = facing === "left" ? " scaleX(-1)" : "";
+    const flip = facing === "right" ? " scaleX(-1)" : "";
     el.style.transform = `translate(${c * cell}px, ${r * cell}px)${flip}`;
   }
   function show(i, snap) {

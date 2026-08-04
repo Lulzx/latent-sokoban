@@ -186,7 +186,8 @@ h1 .px { color: var(--accent); }
   0%   { filter: brightness(1.5); }
   100% { filter: brightness(1); }
 }
-/* Facing. `left` is `side` mirrored, and because the sprite's transform
+/* Facing. The side sprite faces left, so `right` is the mirrored one, and
+   because the sprite's transform
    carries its board position, the flip is appended there in JS. */
 .dot { background-image: url(/static/sprites/player-down.png); }
 .dot.up    { background-image: url(/static/sprites/player-up.png); }

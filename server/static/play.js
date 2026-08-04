@@ -166,7 +166,7 @@
       sprites[i].classList.toggle("home", goals.has(key(r, c)));
       place(sprites[i], r, c, false);
     }
-    place(playerEl, state.player[0], state.player[1], state.facing === "left");
+    place(playerEl, state.player[0], state.player[1], state.facing === "right");
 
     el.lvl.textContent = (index + 1) + " / " + levels.length;
     el.moves.textContent = state.moves;
@@ -184,7 +184,9 @@
     if (!d) return;
 
     state.facing = dir;
-    playerEl.className = "sprite dot " + (dir === "left" ? "right" : dir);
+    // The side sprite faces left, so it is the rightward move that gets
+    // mirrored. Both directions share the one background image.
+    playerEl.className = "sprite dot " + (dir === "right" ? "left" : dir);
 
     var tr = state.player[0] + d[0], tc = state.player[1] + d[1];
     var tk = key(tr, tc);
