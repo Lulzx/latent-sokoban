@@ -181,7 +181,7 @@
   // ------------------------------------------------------------------ moves
 
   function move(dir) {
-    if (!state || !el.win.hidden) return;
+    if (!state || !el.win.hidden || state.locked) return;
     var d = DIRS[dir];
     if (!d) return;
 
@@ -202,6 +202,7 @@
       moves: state.moves, pushes: state.pushes
     };
 
+    var pushed = -1;
     var ci = state.crateAt[tk];
     if (ci !== undefined) {
       var br = tr + d[0], bc = tc + d[1], bk = key(br, bc);
@@ -214,6 +215,7 @@
       delete state.crateAt[tk];
       state.crateAt[bk] = ci;
       state.pushes++;
+      pushed = ci;
     }
 
     state.player = [tr, tc];
@@ -222,7 +224,32 @@
     if (state.history.length > 5000) state.history.shift();
 
     render();
-    if (solved()) win();
+    if (solved()) winWhenTheCrateLands(pushed);
+  }
+
+  /* Announcing the solve on the same frame as the winning push covers the
+     board before the crate has visibly arrived. Wait for that crate's slide
+     to finish, then declare it. Input stays locked in between so the win
+     cannot be moved out from under. */
+  function winWhenTheCrateLands(ci) {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches || ci < 0) {
+      win();
+      return;
+    }
+    state.locked = true;
+    var node = sprites[ci];
+    var fired = false;
+    var finish = function () {
+      if (fired) return;
+      fired = true;
+      node.removeEventListener("transitionend", finish);
+      state.locked = false;
+      win();
+    };
+    node.addEventListener("transitionend", finish);
+    // transitionend does not fire if the transform did not actually change
+    // or the tab is backgrounded, so never wait on it alone.
+    setTimeout(finish, 400);
   }
 
   function solved() {
@@ -249,7 +276,9 @@
     if (record) progress.solved[index] = { moves: state.moves, pushes: state.pushes };
     save();
 
-    el.winText.textContent = state.moves + " moves, " + state.pushes + " pushes" +
+    var plural = function (n, word) { return n + " " + word + (n === 1 ? "" : "s"); };
+    el.winText.textContent =
+      plural(state.moves, "move") + ", " + plural(state.pushes, "push") +
       (record && prev ? ", a new best, beating " + prev.moves : "");
     el.win.hidden = false;
     el.next.disabled = index >= levels.length - 1;
