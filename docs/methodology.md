@@ -31,8 +31,9 @@ good instrument for it because:
 | ≤ 256 dynamics calls per action | Brute-forcing the tree instead of learning a heuristic |
 | ≤ 20M parameters | Buying performance with scale |
 | Hidden levels, server-side | Overfitting to a published test set |
-| Unplayed episodes count as failures | Cherry-picking a favourable subset |
-| Rate-limited scorecards | Resubmitting until a lucky seed lands |
+| Unplayed episodes count as failures | Cherry-picking a favourable subset within one run |
+| Scorecards counted when opened | Reconnaissance runs that are abandoned rather than closed |
+| Replay moves are owner-only | Replaying someone else's solution on a fixed, deterministic set |
 
 The decode-then-search rule is the subtle one. Learning a mapping from
 pixels to a discrete board is legitimate representation learning, and it is

@@ -5,7 +5,7 @@ How to stand up the evaluation API, and what the deployment expects.
 ## Locally
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[server]"
 SOKOBAN_SEED=123 uvicorn server.app:app --port 8321
 ```
 
@@ -68,6 +68,12 @@ systemctl restart sokoban
     Game sessions and open scorecards are held in memory. Restarting
     discards them, and any agent mid-run gets an error on its next call.
     Check the leaderboard for recent activity before restarting.
+
+    A scorecard that was open at the restart keeps its row, with `closed`
+    still NULL, so it counts against that entrant's daily allowance without
+    producing a result. That is the same way an abandoned run is treated,
+    and it is deliberate, but it means a restart costs active entrants an
+    attempt.
 
 ### Rotating the hidden set
 
