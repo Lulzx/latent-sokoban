@@ -82,14 +82,15 @@
     will-change: transform;
   }
   .crate {
+    width: calc(var(--cell) * .78); height: calc(var(--cell) * .78);
     background: var(--crate);
     box-shadow: inset 0 0 0 4px var(--crate-edge), inset 0 0 0 6px var(--crate);
-    scale: .78; border-radius: 2px;
+    border-radius: 2px;
   }
   .crate.home { background: #cea046; box-shadow: inset 0 0 0 4px #8f6a20; }
   .dot {
+    width: calc(var(--cell) * .6); height: calc(var(--cell) * .6);
     background: var(--player); border-radius: 50%;
-    scale: .6;
   }
   .board.snap .sprite { transition: none; }
   @media (prefers-reduced-motion: reduce) {
@@ -299,7 +300,8 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
   const wait = [800, 450, 450, 450, 650, 1600];
   function place(el, r, c) {
     const cell = board.querySelector(".cell").getBoundingClientRect().width;
-    el.style.transform = `translate(${c * cell}px, ${r * cell}px)`;
+    const pad = (cell - el.getBoundingClientRect().width) / 2;
+    el.style.transform = `translate(${c * cell + pad}px, ${r * cell + pad}px)`;
   }
   function show(i, snap) {
     if (snap) board.classList.add("snap");
