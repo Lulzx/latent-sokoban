@@ -36,7 +36,7 @@ POST /api/scorecards/{sid}/close              → final Score → leaderboard
 ```
 
 A **scorecard** is one submission attempt. A **game session** plays all
-hidden episodes of one game (v1 has one game, `standard`: 50 hidden 8×8
+hidden episodes of one game (v1 has one game, `standard`: 100 hidden 8×8
 three-box levels, 80 steps each). One session per game per scorecard;
 retries need a fresh scorecard. **Closing a scorecard locks it**: every
 unplayed or unfinished episode counts as unsolved, so partial runs can't
@@ -53,7 +53,7 @@ Every `start` and `act` response is a Frame:
   "state": "IN_PROGRESS",          // or "GAME_OVER" after the last episode
   "episode": {
     "index": 3,                    // 0-based episode being played
-    "of": 50,
+    "of": 100,
     "steps_used": 12,
     "max_steps": 80
   },
@@ -102,7 +102,7 @@ Returned by `close` (and inside the final Frame's `result`):
 
 ```jsonc
 {
-  "episodes": 50,
+  "episodes": 100,
   "solved": 21,
   "success_rate": 0.42,          // primary ranking key
   "move_efficiency": 0.7134,     // mean optimal/agent steps, solved only; 2nd key

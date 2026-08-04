@@ -53,7 +53,7 @@
   </div>
   <div class="empty" id="lb-empty" hidden>
     <b>No runs yet.</b>
-    Fifty hidden levels are waiting. Take the first push.
+    One hundred hidden levels are waiting. Take the first push.
   </div>
 </section>
 
@@ -81,12 +81,12 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
     <li><span class="call">POST /api/scorecards</span> opens a scorecard: one submission attempt.
       <span class="why">Authenticated by your API key; the key is your
       leaderboard identity.</span></li>
-    <li><span class="call">…/games/standard/start</span> begins a session over 50 hidden 8×8 levels.
+    <li><span class="call">…/games/standard/start</span> begins a session over 100 hidden 8×8 levels.
       <span class="why">Every frame carries the board and the goal as raw
       64×64×3 bytes. The layouts never leave the server.</span></li>
     <li><span class="call">POST /api/sessions/{id}/act</span> sends one action: up, down, left, right.
       <span class="why">Invalid moves are no-ops that still consume a step.
-      80 steps per level.</span></li>
+      Each level's step budget is three times its own optimal solution.</span></li>
     <li><span class="call">…/close</span> locks the scorecard and posts it to the leaderboard.
       <span class="why">Unplayed episodes count as unsolved, so there is no
       cherry-picking. Completed sessions get a public replay.</span></li>
@@ -96,8 +96,9 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
 <section class="wrap">
   <h2>The rules that matter</h2>
   <dl class="spec">
-    <dt>8×8 boards, 3 crates</dt>
-    <dd>Every hidden level in the standard game.</dd>
+    <dt>8×8 boards, 1 to 4 crates</dt>
+    <dd>100 hidden levels, ordered easiest first. Crate count rises with
+      the level number, and so does the length of the shortest solution.</dd>
 
     <dt>64×64 RGB observations</dt>
     <dd>The board and the goal, as raw bytes. Nothing symbolic.</dd>

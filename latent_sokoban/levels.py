@@ -18,6 +18,97 @@ import numpy as np
 from latent_sokoban.env import Level
 from latent_sokoban.solver import bfs_solve
 
+# ---------------------------------------------------------------- ramp --
+#
+# The hidden evaluation set is 100 levels ordered easiest first. Difficulty
+# rises on two axes at once:
+#
+#   * crate count (1 -> 4), which is the real lever. Each extra crate
+#     multiplies the reachable state space and the ways to deadlock.
+#   * solution length, via a band that slides up across each tier.
+#
+# Solution length alone cannot carry the ramp. Measured optimal-length
+# distributions for these configs (n=400 per tier, n=170 for 4 crates):
+#
+#     crates  density   p5   p25   p50   p75   p95   max   gen rate
+#       1       0.10     4     7     9    13    18    33   2265/s
+#       2       0.12     9    13    16    20    28    52     81/s
+#       3       0.14    12    17    20    24    35    49    7.6/s
+#       4       0.18    16    21    26    31    42    54    1.1/s
+#
+# At a fixed 3 crates the ceiling is ~46 moves, so a ramp that only slid the
+# band would barely separate level 1 from level 100.
+#
+# Board size stays 8x8 throughout, so a 64x64 observation always means the
+# same 8 pixels per tile and an agent never meets two tile scales mid-run.
+#
+# (n_levels, n_boxes, wall_density, band_at_tier_start, band_at_tier_end)
+HIDDEN_TIERS = [
+    (25, 1, 0.10, (4, 8), (14, 20)),
+    (25, 2, 0.12, (9, 14), (22, 30)),
+    (30, 3, 0.14, (13, 18), (28, 38)),
+    (20, 4, 0.18, (17, 23), (34, 46)),
+]
+
+# A step budget proportional to each level's own optimal solution, rather
+# than one flat number that is loose for short levels and starving for long
+# ones.
+STEP_MULTIPLE = 3
+MIN_STEPS = 30
+
+
+def _tier_band(i: int, n: int, start: tuple[int, int],
+               end: tuple[int, int]) -> tuple[int, int]:
+    """Interpolate the (min, max) solution-length band across a tier."""
+    t = i / max(n - 1, 1)
+    lo = round(start[0] + t * (end[0] - start[0]))
+    hi = round(start[1] + t * (end[1] - start[1]))
+    return lo, max(hi, lo + 2)
+
+
+def generate_hidden_set(seed: int, progress=None) -> dict:
+    """Generate the full 100-level hidden set from a secret seed.
+
+    Deterministic in `seed`. Takes roughly 70s, nearly all of it in the
+    4-crate tier, where rejection sampling for a long-solution band is slow.
+    """
+    rng = np.random.default_rng(seed)
+    levels: list[dict] = []
+
+    for n, n_boxes, density, start, end in HIDDEN_TIERS:
+        for i in range(n):
+            lo, hi = _tier_band(i, n, start, end)
+            # Widen on repeated failure rather than hanging: the measured
+            # distributions are noisy at the tails, so a target occasionally
+            # lands where sampling is very unlikely.
+            for attempt in range(4):
+                try:
+                    level, solution = generate_level(
+                        rng, size=8, n_boxes=n_boxes, wall_density=density,
+                        min_solution_len=lo, max_solution_len=hi,
+                        max_tries=20000)
+                    break
+                except RuntimeError:
+                    if attempt == 3:
+                        raise
+                    lo, hi = max(2, lo - 3), hi + 4
+            optimal = len(solution)
+            levels.append({
+                "ascii": level.to_ascii(),
+                "optimal_len": optimal,
+                "n_crates": n_boxes,
+                "max_steps": max(MIN_STEPS, STEP_MULTIPLE * optimal),
+            })
+            if progress:
+                progress(len(levels), n_boxes, optimal)
+
+    return {
+        "name": "hidden_public_v2",
+        "n_levels": len(levels),
+        "ramp": "1-25: 1 crate, 26-50: 2, 51-80: 3, 81-100: 4",
+        "levels": levels,
+    }
+
 
 def generate_level(
     rng: np.random.Generator,

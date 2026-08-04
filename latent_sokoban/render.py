@@ -3,7 +3,7 @@
 The default theme is what the shared training set uses. random_theme()
 produces visually perturbed themes for Split B (visual generalization):
 different floor/wall colours, sprite tints, checker patterns and pixel
-noise — while keeping the underlying state fully recoverable.
+noise, while keeping the underlying state fully recoverable.
 """
 
 from __future__ import annotations

@@ -73,21 +73,18 @@ _scorecards: dict[str, dict] = {}     # open scorecards
 # ---------------------------------------------------------------- levels --
 
 def _load_levels() -> list[dict]:
+    """Load the hidden set, generating it from the seed if absent.
+
+    Generation takes roughly 70s, so the API is unreachable for that long on
+    a cold first boot. Run scripts/generate_hidden.py ahead of time when
+    that matters; this path exists so a fresh deploy still works unattended.
+    """
     if not LEVELS_PATH.exists():
         seed = os.environ.get("SOKOBAN_SEED")
         if not seed:
             raise SystemExit("no hidden level file and SOKOBAN_SEED unset")
-        from latent_sokoban.levels import generate_level
-        rng = np.random.default_rng(int(seed))
-        levels = []
-        while len(levels) < 50:
-            level, solution = generate_level(
-                rng, size=8, n_boxes=3, wall_density=0.10,
-                min_solution_len=10, max_solution_len=50)
-            levels.append({"ascii": level.to_ascii(),
-                           "optimal_len": len(solution), "max_steps": 80})
-        LEVELS_PATH.write_text(json.dumps(
-            {"name": "hidden_public", "max_steps": 80, "levels": levels}))
+        from latent_sokoban.levels import generate_hidden_set
+        LEVELS_PATH.write_text(json.dumps(generate_hidden_set(int(seed))))
     return json.loads(LEVELS_PATH.read_text())["levels"]
 
 

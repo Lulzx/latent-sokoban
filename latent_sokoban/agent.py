@@ -25,7 +25,7 @@ self.call_meter every time your dynamics model runs:
 
 The harness checks the meter after every act(): exceeding the per-action
 cap fails the episode (strict mode, the default). Correct metering is
-verified by source review at submission — an unmetered or under-metered
+verified by source review at submission. An unmetered or under-metered
 dynamics call is a rules violation. Encoder and goal-scoring passes are
 free; only latent transition predictions count.
 """

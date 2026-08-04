@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Leaderboard · Latent Sokoban Challenge</title>
-<meta name="description" content="Standings for the Latent Sokoban Challenge: success rate, move efficiency and deadlock rate over fifty hidden levels.">
+<meta name="description" content="Standings for the Latent Sokoban Challenge: success rate, move efficiency and deadlock rate over one hundred hidden levels.">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preload" href="/static/fonts/plex-sans-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/static/fonts/plex-mono-400-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -25,7 +25,7 @@
 
 <header class="wrap hero-wrap slim">
   <h1>Leaderboard</h1>
-  <p class="lede wide">Every entrant's best scorecard over the same fifty
+  <p class="lede wide">Every entrant's best scorecard over the same one hundred
   hidden levels, ranked by success rate. Ties break on move efficiency, then
   on deadlock rate.</p>
   <p class="sectionnote count" id="lb-count" hidden></p>
@@ -53,7 +53,7 @@
 
   <div class="empty" id="lb-empty" hidden>
     <b>No runs yet.</b>
-    Fifty hidden levels are waiting. Clone the repo, register a name, and take
+    One hundred hidden levels are waiting. Clone the repo, register a name, and take
     the first push. <a href="/">The quickstart is four commands</a>.
   </div>
 
@@ -68,11 +68,12 @@
   <h2>What the columns mean</h2>
   <dl class="spec">
     <dt>Solved</dt>
-    <dd>Levels finished within the 80-step budget, out of the episodes played.
-      Unplayed episodes count as unsolved.</dd>
+    <dd>Levels finished within the level's own step budget, which is three
+      times its optimal solution. Unplayed episodes count as unsolved.</dd>
 
     <dt>Success</dt>
-    <dd>Solved levels as a share of all fifty. This is the ranking metric.</dd>
+    <dd>Solved levels as a share of all one hundred. This is the ranking
+      metric.</dd>
 
     <dt>Move eff.</dt>
     <dd>Optimal steps divided by steps taken, averaged over solved levels.
@@ -93,7 +94,7 @@
 <section class="wrap">
   <h2>Getting on it</h2>
   <p class="prose sectionnote">Register a name for an API key, open a scorecard,
-  play the fifty hidden levels through the evaluation API, and close it. Closing
+  play the one hundred hidden levels through the evaluation API, and close it. Closing
   is what publishes the result, and it counts every unplayed episode as
   unsolved, so a partial run cannot be cherry-picked into a good score. The
   <a href="/">overview</a> has the four commands; the wire schema is in

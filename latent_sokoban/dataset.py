@@ -67,7 +67,7 @@ def perturbed_solution(
     rng: np.random.Generator, solution: list[int], n_perturb: int = 3
 ) -> list[int]:
     """Insert random detour actions into an optimal solution. The episode
-    may or may not still solve — both outcomes are useful signal."""
+    may or may not still solve, and both outcomes are useful signal."""
     actions = list(solution)
     for _ in range(n_perturb):
         pos = int(rng.integers(0, len(actions) + 1))

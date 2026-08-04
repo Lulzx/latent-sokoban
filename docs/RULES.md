@@ -292,7 +292,7 @@ The final agent may not:
 * Use privileged simulator state for planning
 * Modify the evaluation environment
 * Train on hidden test levels
-* Reconstruct a discrete board representation at inference time — no
+* Reconstruct a discrete board representation at inference time. No
   tile classification, object detection to grid coordinates, or any
   other module whose output is an exact symbolic board state, whether
   hand-coded or learned
@@ -601,8 +601,8 @@ Recommended length: two to four pages.
 
 | Competitor   | Standard Success | Generalization | Deadlock Success | Move Efficiency | Planning Time | Parameters | Final Score |
 | ------------ | ---------------: | -------------: | ---------------: | --------------: | ------------: | ---------: | ----------: |
-| Competitor A |                — |              — |                — |               — |             — |          — |           — |
-| Competitor B |                — |              — |                — |               — |             — |          — |           — |
+| Competitor A |                - |              - |                - |               - |             - |          - |           - |
+| Competitor B |                - |              - |                - |               - |             - |          - |           - |
 
 ## Dispute Resolution
 
