@@ -319,9 +319,19 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
     if (snap) board.classList.add("snap");
     const [pr, pc, cr, cc] = states[i];
     place(dot, pr, pc); place(crate, cr, cc);
-    crate.classList.toggle("home", cr === goalPos[0] && cc === goalPos[1]);
+    const onGoal = cr === goalPos[0] && cc === goalPos[1];
+    if (!onGoal) {
+      crate.classList.remove("home");       // leaving the goal: unlight now
+    } else if (snap) {
+      crate.classList.add("home");          // static placement: no slide
+    }
+    // while sliding onto the goal, light up only on arrival (transitionend)
     if (snap) { void board.offsetWidth; board.classList.remove("snap"); }
   }
+  crate.addEventListener("transitionend", () => {
+    const [, , cr, cc] = states[(i + states.length - 1) % states.length];
+    if (cr === goalPos[0] && cc === goalPos[1]) crate.classList.add("home");
+  });
   let i = 0;
   function tick() {
     show(i, i === 0);
