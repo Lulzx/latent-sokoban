@@ -10,3 +10,4 @@ results.json
 server/leaderboard.db
 server/hidden_levels.json
 site/
+.DS_Store
