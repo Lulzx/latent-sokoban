@@ -17,7 +17,7 @@ transcribed from the default level pack in davidjoffe/sokoban.
 
 Usage:
     python scripts/build_play_levels.py \
-        --in levels/original.txt --out server/static/play-levels.json
+        --in server/play-levels-original.txt --out server/static/play-levels.json
 """
 
 from __future__ import annotations

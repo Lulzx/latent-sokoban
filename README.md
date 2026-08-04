@@ -315,7 +315,8 @@ rerunning the submission. That profile is a self-assessment, not a ranking.
 ## Credits
 
 - Board art: [Kenney](https://www.kenney.nl/assets/sokoban) (CC0)
-- `/play` levels: [morenod/sokoban](https://github.com/morenod/sokoban) (MIT)
+- `/play` levels: Thinking Rabbit's 50-level **Original** collection, sourced
+  from [davidjoffe/sokoban](https://github.com/davidjoffe/sokoban)
 - Typeface: [IBM Plex](https://github.com/IBM/plex) (OFL 1.1)
 
 ## License
