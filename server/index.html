@@ -91,6 +91,7 @@
     background: var(--player); border-radius: 50%;
     scale: .6;
   }
+  .board.snap .sprite { transition: none; }
   @media (prefers-reduced-motion: reduce) {
     .sprite { transition: none; }
   }
@@ -284,29 +285,41 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
   dot.className = "sprite dot";
   board.appendChild(crate); board.appendChild(dot);
 
-  /* states: [playerR, playerC, crateR, crateC] — walk around, push right */
+  /* states: [playerR, playerC, crateR, crateC] — every step is one legal
+     Sokoban move: walk up beside the crate, then push it right onto the
+     goal. The wrap-around back to the start snaps (no transition). */
   const states = [
-    [4, 2, 2, 1], [4, 1, 2, 1], [3, 1, 2, 1], [2, 1, 2, 1],
-    [2, 2, 2, 3],                    /* the push */
-    [2, 2, 2, 3], [2, 2, 2, 3],      /* hold the solve */
+    [4, 2, 2, 2],   /* start */
+    [4, 1, 2, 2],   /* left  */
+    [3, 1, 2, 2],   /* up    */
+    [2, 1, 2, 2],   /* up    */
+    [2, 2, 2, 3],   /* push right: crate lands on the goal */
+    [2, 2, 2, 3],   /* hold the solve */
   ];
-  const wait = [900, 500, 500, 700, 900, 600, 1200];
+  const wait = [800, 450, 450, 450, 650, 1600];
   function place(el, r, c) {
     const cell = board.querySelector(".cell").getBoundingClientRect().width;
     el.style.transform = `translate(${c * cell}px, ${r * cell}px)`;
   }
-  let i = 0;
-  function tick() {
+  function show(i, snap) {
+    if (snap) board.classList.add("snap");
     const [pr, pc, cr, cc] = states[i];
     place(dot, pr, pc); place(crate, cr, cc);
     crate.classList.toggle("home", cr === goalPos[0] && cc === goalPos[1]);
+    if (snap) { void board.offsetWidth; board.classList.remove("snap"); }
+  }
+  let i = 0;
+  function tick() {
+    show(i, i === 0);
+    const delay = wait[i];
     i = (i + 1) % states.length;
-    setTimeout(tick, wait[i]);
+    setTimeout(tick, delay);
   }
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (reduced) { const s = states[4]; place(dot, s[0], s[1]); place(crate, s[2], s[3]); crate.classList.add("home"); }
+  if (reduced) show(states.length - 1, true);
   else tick();
-  addEventListener("resize", () => { const s = states[(i + states.length - 1) % states.length]; place(dot, s[0], s[1]); place(crate, s[2], s[3]); });
+  addEventListener("resize", () =>
+    show((i + states.length - 1) % states.length, true));
 })();
 
 /* ---- leaderboard ---- */
