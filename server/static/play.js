@@ -146,13 +146,13 @@
   /* Cell size is solved for, not guessed: take the smaller of the width and
      height each axis can afford, so the whole board is always on screen. */
   function fit() {
-    var box = el.stage.getBoundingClientRect();
-    var pad = 24;
-    var cell = Math.floor(Math.min(
-      (box.width  - pad) / level.w,
-      (box.height - pad) / level.h
-    ));
-    cell = Math.max(9, Math.min(cell, 64));
+    var cs = getComputedStyle(el.stage);
+    var w = el.stage.clientWidth
+          - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var h = el.stage.clientHeight
+          - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var cell = Math.floor(Math.min(w / level.w, h / level.h));
+    cell = Math.max(4, Math.min(cell, 64));
     el.board.style.setProperty("--cell", cell + "px");
   }
 
@@ -391,10 +391,15 @@
     .addEventListener("click", function () { el.picker.hidden = true; });
 
   var resizeTimer;
-  addEventListener("resize", function () {
+  function refit() {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function () { if (level) { fit(); render(); } }, 80);
-  });
+  }
+  addEventListener("resize", refit);
+  /* The stage also changes height without the window resizing: the deck wraps
+     to another row, a mobile URL bar slides away. The board is sized from the
+     stage, never the other way round, so watching it cannot feed back. */
+  if (window.ResizeObserver) new ResizeObserver(refit).observe(el.stage);
 
   // ------------------------------------------------------------------- boot
 

@@ -2,8 +2,12 @@
    is left after a compact status bar and a thumb-reachable control deck,
    and the cell size is computed to fit rather than scrolled to. */
 
+/* A fixed height, not a minimum: the stage measures itself to size the board,
+   so if the body could grow with its content that measurement would just
+   report the oversized board back and the big levels would never shrink. */
 .play-body {
-  min-height: 100svh;
+  height: 100vh;
+  height: 100svh;
   display: flex;
   flex-direction: column;
   overflow: hidden;              /* the board fits; the page never scrolls */
