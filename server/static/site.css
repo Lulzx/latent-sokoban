@@ -110,9 +110,19 @@ em { font-style: italic; }
 }
 .masthead .mark { color: var(--ink-dim); }
 .masthead .mark b { color: var(--ink); font-weight: 600; }
-.masthead nav { display: flex; gap: 20px; }
+/* Wraps. Five links in mono at 13px are wider than a 360px phone, and an
+   unwrapped nav does not overflow quietly: it widens the document and the
+   whole page starts scrolling sideways. */
+.masthead nav { display: flex; gap: 20px; flex-wrap: wrap; }
 .masthead nav a { color: var(--ink-dim); text-decoration: none; }
 .masthead nav a:hover { color: var(--ink); }
+/* Touch devices get the padded target at any width, not only under the 640px
+   breakpoint: a tablet is still a thumb. Keyed on the pointer, since that is
+   the thing that actually decides how big the target has to be. */
+@media (pointer: coarse) {
+  .masthead nav { gap: 4px 18px; margin-inline: -8px; }
+  .masthead nav a { padding: 7px 8px; }
+}
 .masthead nav a[aria-current="page"] {
   color: var(--ink); text-decoration: underline;
   text-decoration-color: var(--accent); text-underline-offset: 5px;
@@ -286,6 +296,16 @@ footer a:hover { color: var(--ink); }
 
 @media (max-width: 640px) {
   body { font-size: 16px; }
+  .wrap { padding-inline: 18px; }
+  /* Stacked, so the nav reads as its own row rather than as a ragged
+     continuation of the tagline. The links get vertical padding because a
+     21px-tall text link is a poor thing to hit with a thumb. */
+  .masthead {
+    flex-direction: column; align-items: stretch; gap: 12px;
+    padding-block: 18px 0;
+  }
+  .masthead nav { gap: 4px 18px; margin-inline: -8px; }
+  .masthead nav a { padding: 7px 8px; }
   header.hero-wrap { padding-block: 40px 56px; }
   header.hero-wrap.slim { padding-block: 36px 28px; }
   .hero { gap: 40px; }
