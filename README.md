@@ -73,6 +73,13 @@ The benchmark is deliberately sized so that brute force loses:
 - **Unplayed episodes count as unsolved.** Closing a scorecard pads the
   results to the full 100 with failures, so stopping a bad run early does
   not help and no favourable subset can be cherry-picked.
+- **Attempts are counted at open, not at close.** Seeing the hidden levels
+  is what a scorecard costs, so 24 per key per day is a cap on how often
+  you can look at them, not on how often you choose to submit. Abandoning
+  a run does not refund the attempt.
+- **Replay action strings are owner-only.** Outcomes stay public, but the
+  moves do not: the hidden set is deterministic, so a published action
+  string would be a replayable perfect score for anyone who read it.
 
 ## The site
 

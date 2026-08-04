@@ -37,10 +37,14 @@ POST /api/scorecards/{sid}/close              → final Score → leaderboard
 
 A **scorecard** is one submission attempt. A **game session** plays all
 hidden episodes of one game (v1 has one game, `standard`: 100 hidden 8×8
-three-box levels, 80 steps each). One session per game per scorecard;
-retries need a fresh scorecard. **Closing a scorecard locks it**: every
-unplayed or unfinished episode counts as unsolved, so partial runs can't
-cherry-pick easy levels.
+levels on a 1-to-4 crate ramp, ordered easiest first, each with a budget of
+three times its own optimal solution). `GET /api/spec` reports the live
+numbers. One session per game per scorecard; retries need a fresh
+scorecard. **Closing a scorecard locks it**: every unplayed or unfinished
+episode counts as unsolved, so partial runs can't cherry-pick easy levels.
+
+Opening a scorecard is what counts against your daily allowance, not
+closing it, so abandoning a run mid-way does not buy a free retry.
 
 ## The Frame object
 
@@ -119,20 +123,28 @@ then ascending `deadlock_rate`.
 
 ## Replays
 
-Each completed session stores a public replay: per-episode outcomes and
-action strings (`"UDLR"` alphabet), never level layouts:
+Each completed session stores a replay of per-episode outcomes, never
+level layouts:
 
 ```
 GET /api/replays/{gid}
 → { "session_id": "gs-…", "name": "my-lab", "game": "standard",
+    "owner_view": false,
     "episodes": [ { "solved": true, "steps": 24, "optimal": 19,
-                    "deadlocked": false, "actions": "UULDDR…" }, … ] }
+                    "deadlocked": false }, … ] }
 ```
+
+Outcomes are public so results stay inspectable. The action strings
+(`"UDLR"` alphabet) are included only when the request carries the key that
+produced the run, which the response marks with `owner_view: true`. The
+hidden set is fixed and
+deterministic, so a published action string is a replayable perfect score:
+anyone holding it could post the same numbers without an agent.
 
 ## Fair-play notes
 
-- Rate limits: 5 keys/IP/day, 24 scorecards/key/day, 200 concurrent
-  sessions server-wide.
+- Rate limits: 5 keys/IP/day, 24 scorecards *opened* per key per day, 3
+  concurrent sessions per key, 200 server-wide.
 - The compute-side rules (≤20M parameters, ≤256 counted dynamics calls
   per action, no symbolic solvers, no decode-then-search) cannot be
   verified over HTTP; they are enforced by source review for prize/

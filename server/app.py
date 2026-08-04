@@ -58,7 +58,11 @@ LEVELS_PATH = Path(os.environ.get("SOKOBAN_LEVELS", ROOT / "hidden_levels.json")
 GAMES = ("standard",)
 SESSION_TTL = 3600
 MAX_ACTIVE_SESSIONS = 200
+MAX_SESSIONS_PER_KEY = 3
 MAX_KEYS_PER_IP_PER_DAY = 5
+# Counts scorecards *opened*, not closed. Opening is what exposes the hidden
+# levels, so an uncapped open is free reconnaissance no matter how few runs
+# are ever submitted.
 MAX_SCORECARDS_PER_KEY_PER_DAY = 24
 NAME_RE = re.compile(r"^[\w .\-]{2,40}$")
 
@@ -97,11 +101,16 @@ def _db() -> sqlite3.Connection:
         conn.execute("""CREATE TABLE IF NOT EXISTS keys (
             key_hash TEXT PRIMARY KEY, name TEXT UNIQUE,
             created REAL, ip TEXT)""")
+        # A row is written when a scorecard is *opened*, with closed NULL and
+        # no metrics; close fills the rest in. Only rows with closed set are
+        # results; the rest are attempts, which is what the daily cap counts.
         conn.execute("""CREATE TABLE IF NOT EXISTS scorecards (
             id TEXT PRIMARY KEY, name TEXT, opened REAL, closed REAL,
             episodes INTEGER, solved INTEGER, success_rate REAL,
             move_efficiency REAL, avg_steps_solved REAL, deadlock_rate REAL,
             total_actions INTEGER)""")
+        conn.execute("""CREATE INDEX IF NOT EXISTS scorecards_name_opened
+            ON scorecards (name, opened)""")
         conn.execute("""CREATE TABLE IF NOT EXISTS replays (
             session_id TEXT PRIMARY KEY, scorecard_id TEXT, name TEXT,
             game TEXT, finished REAL, episodes_json TEXT)""")
@@ -119,17 +128,25 @@ def _client_ip(request: Request) -> str:
     return fwd.split(",")[0].strip() if fwd else (request.client.host or "?")
 
 
-def _auth(x_api_key: str | None) -> str:
-    """Returns the leaderboard name bound to the key."""
+def _name_for_key(x_api_key: str | None) -> str | None:
+    """The leaderboard name bound to a key, or None if it is absent/unknown."""
     if not x_api_key:
-        raise HTTPException(401, "missing X-API-Key header")
+        return None
     conn = _db()
     row = conn.execute("SELECT name FROM keys WHERE key_hash=?",
                        (_hash(x_api_key),)).fetchone()
     conn.close()
-    if not row:
+    return row[0] if row else None
+
+
+def _auth(x_api_key: str | None) -> str:
+    """Returns the leaderboard name bound to the key."""
+    if not x_api_key:
+        raise HTTPException(401, "missing X-API-Key header")
+    name = _name_for_key(x_api_key)
+    if name is None:
         raise HTTPException(401, "unknown API key")
-    return row[0]
+    return name
 
 
 def _b64(img: np.ndarray) -> str:
@@ -230,10 +247,20 @@ class Act(BaseModel):
 
 @app.get("/api/spec")
 def spec() -> dict:
+    # Read off the loaded set rather than restating it: the crate ramp and the
+    # per-level step budgets have both changed, and a hardcoded summary drifts.
+    crates = sorted({lv["n_crates"] for lv in LEVELS if "n_crates" in lv})
+    budgets = [lv["max_steps"] for lv in LEVELS]
     return {
-        "games": {"standard": {"board": "8x8, 3 boxes, hidden layouts",
-                               "episodes": len(LEVELS),
-                               "max_steps_per_episode": 80}},
+        "games": {"standard": {
+            "board": "8x8, hidden layouts, ordered easiest first",
+            "episodes": len(LEVELS),
+            "crates_per_level": (f"{crates[0]}-{crates[-1]}" if crates
+                                 else "unspecified"),
+            "max_steps_per_episode": (
+                f"{min(budgets)}-{max(budgets)}, three times each level's own "
+                "optimal solution"),
+        }},
         "actions": {"0": "up", "1": "down", "2": "left", "3": "right"},
         "observation": "64x64x3 uint8, base64-encoded raw bytes",
         "protocol": "https://github.com/Lulzx/latent-sokoban/blob/main/docs/API.md",
@@ -277,16 +304,24 @@ def open_scorecard(request: Request,
     n_day = conn.execute(
         "SELECT COUNT(*) FROM scorecards WHERE name=? AND opened>?",
         (name, now - 86400)).fetchone()[0]
-    conn.close()
     if n_day >= MAX_SCORECARDS_PER_KEY_PER_DAY:
-        raise HTTPException(429, "scorecard limit reached; try later")
+        conn.close()
+        raise HTTPException(
+            429, f"{MAX_SCORECARDS_PER_KEY_PER_DAY} scorecards opened in the "
+                 "last 24h; try later")
+    sid = "sc-" + secrets.token_urlsafe(16)
+    with conn:  # recorded at open, so abandoning a run does not buy a retry
+        conn.execute("INSERT INTO scorecards (id, name, opened) VALUES (?,?,?)",
+                     (sid, name, now))
+    conn.close()
     with _lock:
         _gc(now)
-        sid = "sc-" + secrets.token_urlsafe(16)
         _scorecards[sid] = {"id": sid, "name": name, "opened": now,
                             "touched": now, "games": {}}
     return {"scorecard_id": sid, "games": list(GAMES),
-            "episodes_per_game": len(LEVELS)}
+            "episodes_per_game": len(LEVELS),
+            "opened_today": n_day + 1,
+            "daily_limit": MAX_SCORECARDS_PER_KEY_PER_DAY}
 
 
 @app.post("/api/scorecards/{sid}/games/{game}/start")
@@ -303,8 +338,15 @@ def start_game(sid: str, game: str,
         if game in card["games"]:
             raise HTTPException(409, "this scorecard already has a session for "
                                      "this game; open a new scorecard to retry")
+        _gc(now)
         if len(_sessions) >= MAX_ACTIVE_SESSIONS:
             raise HTTPException(503, "server at capacity; try later")
+        # a per-key cap as well, so one entrant cannot take the whole pool
+        mine = sum(1 for s in _sessions.values() if s["name"] == name)
+        if mine >= MAX_SESSIONS_PER_KEY:
+            raise HTTPException(
+                429, f"{MAX_SESSIONS_PER_KEY} sessions already in flight for "
+                     "this key; finish or abandon one first")
         card["touched"] = now
         gid = "gs-" + secrets.token_urlsafe(16)
         session = {"id": gid, "scorecard": sid, "name": name, "game": game,
@@ -383,47 +425,64 @@ def close_scorecard(sid: str, x_api_key: str | None = Header(None)) -> dict:
     summary = _game_summary(results, pad_to=len(LEVELS))
     conn = _db()
     with conn:
-        conn.execute("INSERT INTO scorecards VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                     (sid, name, card["opened"], time.time(),
-                      summary["episodes"], summary["solved"],
-                      summary["success_rate"], summary["move_efficiency"],
-                      summary["avg_steps_solved"], summary["deadlock_rate"],
-                      summary["total_actions"]))
+        conn.execute(
+            """UPDATE scorecards SET closed=?, episodes=?, solved=?,
+                   success_rate=?, move_efficiency=?, avg_steps_solved=?,
+                   deadlock_rate=?, total_actions=?
+               WHERE id=?""",
+            (time.time(), summary["episodes"], summary["solved"],
+             summary["success_rate"], summary["move_efficiency"],
+             summary["avg_steps_solved"], summary["deadlock_rate"],
+             summary["total_actions"], sid))
     conn.close()
     return {"scorecard_id": sid, "name": name, "closed": True,
             "games": {"standard": summary}}
 
 
 @app.get("/api/replays/{gid}")
-def replay(gid: str) -> dict:
-    """Public: per-episode action strings and outcomes (never level layouts)."""
+def replay(gid: str, x_api_key: str | None = Header(None)) -> dict:
+    """Per-episode outcomes for a finished session (never level layouts).
+
+    The action strings are withheld from everyone but the run's owner. The
+    hidden set is fixed and deterministic, so a published action string is a
+    replayable perfect score: anyone holding it can post the same numbers
+    without an agent. Outcomes stay public so results remain inspectable.
+    """
     conn = _db()
     row = conn.execute("SELECT name, game, finished, episodes_json "
                        "FROM replays WHERE session_id=?", (gid,)).fetchone()
     conn.close()
     if not row:
         raise HTTPException(404, "no replay for that session")
+    owner = _name_for_key(x_api_key) == row[0]
+    episodes = json.loads(row[3])
+    if not owner:
+        episodes = [{k: v for k, v in ep.items() if k != "actions"}
+                    for ep in episodes]
     return {"session_id": gid, "name": row[0], "game": row[1],
-            "finished": row[2], "episodes": json.loads(row[3])}
+            "finished": row[2], "owner_view": owner, "episodes": episodes}
 
 
 @app.get("/api/leaderboard")
 def leaderboard() -> JSONResponse:
     conn = _db()
+    # Bare columns alongside MAX() come from the row that matched the max:
+    # a SQLite-specific guarantee, and it holds because there is one aggregate.
     rows = conn.execute(
         """SELECT name, MAX(success_rate) AS sr, move_efficiency,
-                  avg_steps_solved, deadlock_rate, episodes, closed
-           FROM scorecards GROUP BY name
+                  avg_steps_solved, deadlock_rate, episodes, solved, closed
+           FROM scorecards WHERE closed IS NOT NULL GROUP BY name
            ORDER BY sr DESC, move_efficiency DESC, deadlock_rate ASC
            LIMIT 100""").fetchall()
-    total = conn.execute("SELECT COUNT(*) FROM scorecards").fetchone()[0]
+    total = conn.execute(
+        "SELECT COUNT(*) FROM scorecards WHERE closed IS NOT NULL").fetchone()[0]
     conn.close()
     return JSONResponse({
         "entries": [
             {"rank": i + 1, "name": r[0], "success_rate": r[1],
              "move_efficiency": r[2], "avg_steps_solved": r[3],
-             "deadlock_rate": r[4], "episodes": r[5],
-             "date": time.strftime("%Y-%m-%d", time.gmtime(r[6]))}
+             "deadlock_rate": r[4], "episodes": r[5], "solved": r[6],
+             "date": time.strftime("%Y-%m-%d", time.gmtime(r[7]))}
             for i, r in enumerate(rows)],
         "total_scorecards": total,
     })

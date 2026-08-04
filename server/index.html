@@ -229,7 +229,7 @@ fetch("/api/leaderboard").then(r => r.json()).then(data => {
     tr.insertCell().textContent = e.name;
     tr.cells[1].className = "name";
     const cells = [
-      `${Math.round(e.success_rate * e.episodes)}/${e.episodes}`,
+      `${e.solved}/${e.episodes}`,
       pct(e.success_rate),
       e.move_efficiency.toFixed(3),
     ];

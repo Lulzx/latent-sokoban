@@ -110,6 +110,8 @@ def main() -> None:
 
     result = client.call(f"/api/scorecards/{sid}/close")
     print("\n\nscore:", json.dumps(result["games"]["standard"], indent=2))
+    # Safe to share: outcomes are public, your action strings are not. They
+    # come back only for requests carrying your key.
     print(f"replay: {args.url}/api/replays/{frame['session_id']}")
 
 
