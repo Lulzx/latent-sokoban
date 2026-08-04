@@ -19,7 +19,14 @@
   font-family: var(--mono); font-size: 13px;
   flex: 0 0 auto;
 }
-.play-bar .home { color: var(--ink-dim); text-decoration: none; font-weight: 600; }
+/* Nothing in the bar may wrap. These are labels, not prose: given less room
+   than they want they each break onto a second line, and the bar grows from
+   one row to three, taking the height out of the board. */
+.play-bar > * { white-space: nowrap; }
+.play-bar .home {
+  display: inline-flex; gap: 6px;
+  color: var(--ink-dim); text-decoration: none; font-weight: 600;
+}
 .play-bar .home:hover { color: var(--ink); }
 .play-bar .lvl { color: var(--ink); font-weight: 600; }
 .play-bar .stats { margin-left: auto; display: flex; gap: 14px; color: var(--ink-dim); }
@@ -119,6 +126,28 @@ button.primary:hover:not(:disabled) { background: #dcb057; border-color: #dcb057
   color: var(--accent); border-color: #5a4a2a; background: #2f2819;
 }
 .picker-grid button.current { border-color: var(--accent); }
+
+/* Phones: the bar keeps every number and drops only the words that the
+   surrounding context already supplies. The wordmark becomes its back
+   arrow, and "Level" goes, because "1 / 52" next to moves and pushes is not
+   ambiguous. Both stay in the accessibility tree, so the link is still
+   named "latent-sokoban" and the counter is still read as a level. */
+@media (max-width: 719px) {
+  .play-bar { gap: 12px; }
+  .play-bar .stats { gap: 12px; }
+  .play-bar .home-name,
+  .play-bar .lvl-word {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap;
+  }
+  /* The arrow is the whole tap target once the name is gone, so it gets a
+     real one. The negative margin lets that padding overlap the bar's own
+     rather than add to it, so the target grows and the bar does not. */
+  .play-bar .home {
+    padding: 11px 14px; margin: -11px -14px; min-width: 44px;
+    font-size: 15px;
+  }
+}
 
 @media (min-width: 720px) {
   .play-bar { font-size: 14px; padding-inline: 24px; }
