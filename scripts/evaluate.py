@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Official evaluation script.
+"""Local evaluation harness for the A-D benchmark splits.
 
-Runs an agent over one or more benchmark splits, averages across
-evaluation seeds, and writes results.json. Every entry is scored by
-this exact script on the same split files.
+Runs an agent over one or more split files, averages across evaluation
+seeds, and writes the results.json that scripts/score.py turns into a
+local profile. The leaderboard score is separate: it comes from the
+server over the hidden set (see docs/scoring.md).
 
 Usage:
     # sanity check with the built-in random agent

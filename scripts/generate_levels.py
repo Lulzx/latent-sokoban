@@ -27,10 +27,12 @@ import numpy as np
 from latent_sokoban.levels import generate_deadlock_level, generate_level
 from latent_sokoban.render import random_theme
 
-# Official configuration is 8x8 with 3 boxes: large enough that the
-# reachable state space (~250k states) cannot be exhausted within the
-# 256-calls-per-action planning budget, so search must be learned-heuristic
-# guided. Split W is the 6x6 warmup used during the baseline round only.
+# These are the local development splits, held at 8x8 with 3 boxes: large
+# enough that the reachable state space (~250k states) cannot be exhausted
+# within the 256-calls-per-action planning budget, so search must be
+# learned-heuristic guided. Split W is the 6x6 warmup for the baseline
+# round only. The hidden set the leaderboard scores is generated separately
+# by latent_sokoban.levels.generate_hidden_set, on a 1-to-4 crate ramp.
 SPLITS = {
     # split: (size, n_boxes, wall_density, min_len, max_len, themed, deadlock, max_steps)
     "W": dict(size=6, n_boxes=1, wall_density=0.12, min_len=4, max_len=25,
@@ -78,7 +80,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--split", choices=sorted(SPLITS), help="single split to generate")
     parser.add_argument("--all", action="store_true",
-                        help="generate warmup split W plus official splits A-D")
+                        help="generate warmup split W plus splits A-D")
     parser.add_argument("--n", type=int, default=100, help="levels per split")
     parser.add_argument("--seed", type=int, default=1001)
     parser.add_argument("--out", required=True, help="output file (or directory with --all)")

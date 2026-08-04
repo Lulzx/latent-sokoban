@@ -67,7 +67,7 @@ Every `start` and `act` response is a Frame:
     "index": 3,                    // 0-based episode being played
     "of": 100,
     "steps_used": 12,
-    "max_steps": 80
+    "max_steps": 57             // this level's own budget, 3x its optimal
   },
   "observation": {                 // null when state == "GAME_OVER"
     "obs":  "<base64>",            // current board
