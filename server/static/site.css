@@ -135,6 +135,7 @@ h1 {
 h1 .px { color: var(--accent); }
 .lede { color: var(--ink-dim); max-width: 44ch; font-size: 18px; }
 .lede.wide { max-width: 56ch; }
+.lede.standout { margin-top: 20px; }
 .lede b { color: var(--ink); font-weight: 600; }
 .sectionnote.count { margin-top: 20px; font-family: var(--mono); font-size: 13px; }
 

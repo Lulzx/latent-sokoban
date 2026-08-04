@@ -1,7 +1,11 @@
 /* /play: a playable Sokoban over the classic level set.
  *
- * Board state is three sets of "r,c" keys plus the player position. Moves
- * push an undo frame first, so undo is a pop rather than a replay.
+ * Crates are an array of positions plus a key -> index map, not a Set. The
+ * index IS the crate's identity and never changes, so crate i always owns
+ * sprite i. An earlier version kept crates in a Set and re-paired elements
+ * to positions on every render; because deleting and re-adding a moved
+ * crate sends it to the end of Set iteration order, the pairing shifted and
+ * crates visibly swapped places with each other.
  *
  * Progress lives in localStorage, not cookies: it is only ever read by this
  * page, so there is no reason to attach it to every request to the server.
@@ -34,10 +38,10 @@
   };
 
   var levels = [];
-  var state = null;          // { player, crates:Set, moves, pushes, history:[] }
-  var level = null;          // the current level record
+  var state = null;          // { player, crates:[[r,c]], crateAt:{}, ... }
+  var level = null;
   var index = 0;
-  var sprites = {};          // "r,c" -> crate element
+  var sprites = [];          // sprites[i] belongs to crates[i], always
   var playerEl = null;
   var progress = load();
 
@@ -66,21 +70,30 @@
 
   function key(r, c) { return r + "," + c; }
 
+  function indexCrates(crates) {
+    var at = Object.create(null);
+    for (var i = 0; i < crates.length; i++) at[key(crates[i][0], crates[i][1])] = i;
+    return at;
+  }
+
   function loadLevel(i) {
     index = Math.max(0, Math.min(i, levels.length - 1));
     level = levels[index];
     progress.current = index;
     save();
 
+    var crates = level.crates.map(function (p) { return [p[0], p[1]]; });
     state = {
       player: level.player.slice(),
-      crates: new Set(level.crates.map(function (p) { return key(p[0], p[1]); })),
+      facing: "down",
+      crates: crates,
+      crateAt: indexCrates(crates),
       moves: 0, pushes: 0, history: []
     };
     level._walls = new Set(level.walls.concat(level.outer_walls)
       .map(function (p) { return key(p[0], p[1]); }));
     level._floor = new Set(level.floor.map(function (p) { return key(p[0], p[1]); }));
-    level._goals = new Set(level.goals.map(function (p) { return key(p[0], p[1]); }));
+    level._goals = level.goals.map(function (p) { return key(p[0], p[1]); });
 
     build();
     fit();
@@ -94,14 +107,14 @@
     el.board.textContent = "";
     el.board.style.setProperty("--cols", level.w);
 
-    var outer = new Set(level.outer_walls.map(function (p) { return key(p[0], p[1]); }));
+    var goals = new Set(level._goals);
     for (var r = 0; r < level.h; r++) {
       for (var c = 0; c < level.w; c++) {
         var k = key(r, c), d = document.createElement("div");
         if (level._walls.has(k)) {
-          d.className = outer.has(k) ? "cell wall outer" : "cell wall";
+          d.className = "cell wall";
         } else if (level._floor.has(k)) {
-          d.className = level._goals.has(k) ? "cell goalcell" : "cell";
+          d.className = goals.has(k) ? "cell goalcell" : "cell";
         } else {
           d.className = "cell void";
         }
@@ -109,12 +122,11 @@
       }
     }
 
-    sprites = {};
-    state.crates.forEach(function (k) {
+    sprites = state.crates.map(function () {
       var s = document.createElement("div");
       s.className = "sprite crate";
       el.board.appendChild(s);
-      sprites[k] = s;
+      return s;
     });
 
     playerEl = document.createElement("div");
@@ -133,7 +145,6 @@
     ));
     cell = Math.max(9, Math.min(cell, 64));
     el.board.style.setProperty("--cell", cell + "px");
-    return cell;
   }
 
   function cellSize() {
@@ -149,22 +160,12 @@
   }
 
   function render() {
-    var moved = Object.create(null);
-    state.crates.forEach(function (k) { moved[k] = true; });
-
-    // Re-key the crate elements to their current squares.
-    var pool = [];
-    for (var old in sprites) pool.push(sprites[old]);
-    var i = 0, fresh = {};
-    state.crates.forEach(function (k) {
-      var parts = k.split(","), r = +parts[0], c = +parts[1];
-      var node = pool[i++];
-      node.classList.toggle("home", level._goals.has(k));
-      place(node, r, c, false);
-      fresh[k] = node;
-    });
-    sprites = fresh;
-
+    var goals = new Set(level._goals);
+    for (var i = 0; i < state.crates.length; i++) {
+      var r = state.crates[i][0], c = state.crates[i][1];
+      sprites[i].classList.toggle("home", goals.has(key(r, c)));
+      place(sprites[i], r, c, false);
+    }
     place(playerEl, state.player[0], state.player[1], state.facing === "left");
 
     el.lvl.textContent = (index + 1) + " / " + levels.length;
@@ -185,48 +186,56 @@
     state.facing = dir;
     playerEl.className = "sprite dot " + (dir === "left" ? "right" : dir);
 
-    var pr = state.player[0], pc = state.player[1];
-    var tr = pr + d[0], tc = pc + d[1], tk = key(tr, tc);
+    var tr = state.player[0] + d[0], tc = state.player[1] + d[1];
+    var tk = key(tr, tc);
 
     // Walls and the void beyond the map both block.
     if (level._walls.has(tk) || !level._floor.has(tk)) { render(); return; }
 
     var snapshot = {
       player: state.player.slice(),
-      crates: new Set(state.crates),
+      crates: state.crates.map(function (p) { return [p[0], p[1]]; }),
       moves: state.moves, pushes: state.pushes
     };
 
-    if (state.crates.has(tk)) {
+    var ci = state.crateAt[tk];
+    if (ci !== undefined) {
       var br = tr + d[0], bc = tc + d[1], bk = key(br, bc);
-      if (level._walls.has(bk) || !level._floor.has(bk) || state.crates.has(bk)) {
+      if (level._walls.has(bk) || !level._floor.has(bk) ||
+          state.crateAt[bk] !== undefined) {
         render(); return;                      // crate has nowhere to go
       }
-      state.crates.delete(tk);
-      state.crates.add(bk);
+      // Move crate ci in place: its index, and so its sprite, is unchanged.
+      state.crates[ci] = [br, bc];
+      delete state.crateAt[tk];
+      state.crateAt[bk] = ci;
       state.pushes++;
     }
 
     state.player = [tr, tc];
     state.moves++;
     state.history.push(snapshot);
-    if (state.history.length > 2000) state.history.shift();
+    if (state.history.length > 5000) state.history.shift();
 
     render();
     if (solved()) win();
   }
 
   function solved() {
-    var all = true;
-    level._goals.forEach(function (g) { if (!state.crates.has(g)) all = false; });
-    return all;
+    for (var i = 0; i < level._goals.length; i++) {
+      if (state.crateAt[level._goals[i]] === undefined) return false;
+    }
+    return true;
   }
 
   function undo() {
     var s = state.history.pop();
     if (!s) return;
-    state.player = s.player; state.crates = s.crates;
-    state.moves = s.moves; state.pushes = s.pushes;
+    state.player = s.player;
+    state.crates = s.crates;
+    state.crateAt = indexCrates(s.crates);
+    state.moves = s.moves;
+    state.pushes = s.pushes;
     render();
   }
 
