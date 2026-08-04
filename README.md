@@ -46,8 +46,10 @@ The benchmark is deliberately sized so that brute force loses:
 | Benchmark splits | `scripts/generate_levels.py` | Warmup W + splits A–D (+ optional E), including the hidden-test-set protocol |
 | Evaluation harness | `latent_sokoban/evaluation.py`, `scripts/evaluate.py` | Deterministic, multi-seed, enforces the dynamics-call budget, reports all official metrics |
 | Agent interface | `latent_sokoban/agent.py` | The only contract competitors implement, including the `CallMeter` |
+| Shared baseline | `baseline/` | The rulebook's required baseline: CNN encoder, 128-d latent, residual MLP dynamics, VICReg-style regularization, beam-search MPC (needs PyTorch) |
 
-The only dependency is numpy.
+The infrastructure's only dependency is numpy; the optional baseline adds
+PyTorch.
 
 ## Quickstart
 
@@ -96,6 +98,53 @@ Agents receive **only** the current image, the goal image and their own action
 history. Symbolic board state, coordinates, transition rules and solver access
 are all off-limits at inference time (the solver is allowed for training-data
 generation and post-hoc analysis).
+
+## Shared baseline
+
+`baseline/` implements the required baseline from the rulebook: a small
+CNN encoder → 128-d latent, learned action embeddings, a residual MLP
+dynamics model (`z' = z + f(z, a)`, 830k parameters total), a one-step
+latent prediction loss with VICReg-style variance/covariance
+regularization, and beam-search MPC scored by Euclidean latent distance
+to the encoded goal image, replanning every action. Requires PyTorch
+(`pip install -e ".[baseline]"`).
+
+```bash
+python baseline/train.py --data data/warmup --out baseline/checkpoint.pt --steps 5000 --seed 13
+python scripts/evaluate.py --agent baseline.agent:BaselineAgent --splits levels/eval_w.json --seeds 0 1 2
+```
+
+Measured results (5,000 training steps, ~9 min on an M-series MPS; 50
+warmup levels / 20 Split-A levels, 3 evaluation seeds):
+
+| Agent | Split W (6×6, 1 box) | Split A (8×8, 3 boxes) | Plan time | Calls/action |
+| --- | --- | --- | --- | --- |
+| Random | 4% | 0% | — | 0 |
+| Baseline | **12%** | **0%** | 3.6 ms | 84 |
+
+Two findings from instrumenting this baseline, so competitors don't
+rediscover them:
+
+- **Plan short, replan often.** One-step prediction is sharp (open-loop
+  drift after 1 imagined step ≈ one true transition), but drift reaches
+  the *entire* typical start-to-goal distance after ~6 imagined steps —
+  long beams score pure noise. The baseline therefore plans at horizon 3
+  and relies on MPC replanning. Extending the usable horizon (multi-step
+  rollout losses, better dynamics) is the single most obvious research
+  direction.
+- **Pure greedy oscillates.** The Euclidean distance field has local
+  minima (any required detour temporarily increases distance), and a
+  deterministic argmin planner parks in them, bouncing left–right
+  forever — even *oracle* dynamics with greedy latent distance only
+  solves 16% of warmup levels. The baseline adds small seeded Gumbel
+  noise (η = 0.2) to plan scores to break loops. Learned value/distance
+  functions that understand detours are the second obvious direction.
+
+The 0% on the official 8×8 three-box config is the point of the
+competition: the baseline verifies the pipeline end-to-end (training
+doesn't collapse — latent std ≈ 1.0; planning runs within budget;
+evaluation is deterministic), and everything above 0% on Split A is
+earned by research.
 
 ## Benchmark splits
 

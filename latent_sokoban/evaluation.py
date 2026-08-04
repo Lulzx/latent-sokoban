@@ -169,6 +169,9 @@ def evaluate_split(
 
 def load_agent(spec: str) -> Agent:
     """Instantiate an agent from 'module.path:ClassName' or a builtin name."""
+    import sys
+    if "" not in sys.path and str(Path.cwd()) not in sys.path:
+        sys.path.insert(0, str(Path.cwd()))  # resolve agents relative to cwd
     builtins = {"random": "latent_sokoban.agent:RandomAgent"}
     spec = builtins.get(spec, spec)
     module_name, _, class_name = spec.partition(":")
