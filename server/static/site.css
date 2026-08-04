@@ -1,0 +1,291 @@
+/* Latent Sokoban Challenge — shared styles for / and /leaderboard.
+   The palette is the board's own: umber void, sand floor, crate brown,
+   goal red, player blue. Plex Sans carries prose; Plex Mono carries
+   anything the machine cares about — code, endpoints, measurements. */
+
+/* ---- IBM Plex (OFL 1.1) — see static/fonts/LICENSE ---- */
+@font-face {
+  font-family: "Plex Sans"; font-style: normal; font-weight: 400 700;
+  font-display: swap;
+  src: url(/static/fonts/plex-sans-var-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Plex Sans"; font-style: normal; font-weight: 400 700;
+  font-display: swap;
+  src: url(/static/fonts/plex-sans-var-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: "Plex Mono"; font-style: normal; font-weight: 400;
+  font-display: swap;
+  src: url(/static/fonts/plex-mono-400-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Plex Mono"; font-style: normal; font-weight: 400;
+  font-display: swap;
+  src: url(/static/fonts/plex-mono-400-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: "Plex Mono"; font-style: normal; font-weight: 600;
+  font-display: swap;
+  src: url(/static/fonts/plex-mono-600-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Plex Mono"; font-style: normal; font-weight: 600;
+  font-display: swap;
+  src: url(/static/fonts/plex-mono-600-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+:root {
+  --void: #241f19;        /* deep umber: the board's off-grid void */
+  --void-lift: #2c261f;   /* one step up, for panels */
+  --rule: #3a332a;
+  --rule-soft: #2e2820;
+  --wall: #5e544a;
+  --wall-edge: #40382f;
+  --floor: #ded6ba;       /* sand */
+  --floor-alt: #d4ccb0;
+  --crate: #b07a36;       /* the crate object itself, never text */
+  --crate-edge: #785020;
+  --goal: #c43c3c;
+  --player: #306cbc;
+  --ink: #e8e1cd;         /* sand-tinted text on umber */
+  --ink-dim: #a99f8a;
+  --accent: #cea046;      /* the crate hue, lifted to pass on umber */
+  --sans: "Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.65;
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--ink); text-underline-offset: 3px; text-decoration-thickness: 1px;
+    text-decoration-color: #7d7364; transition: text-decoration-color .12s ease; }
+a:hover { text-decoration-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--player); outline-offset: 3px; }
+code, kbd, samp, pre { font-family: var(--mono); }
+em { font-style: italic; }
+/* Horizontal only: block padding belongs to each landmark, and a shorthand
+   here would out-specify `section`/`footer` and silently flatten the page. */
+.wrap { max-width: 900px; margin: 0 auto; padding-inline: 24px; }
+.prose { max-width: 66ch; }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+/* ---- masthead ---- */
+.masthead {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap;
+  padding-block: 22px 0;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .04em;
+}
+.masthead .mark { color: var(--ink-dim); }
+.masthead .mark b { color: var(--ink); font-weight: 600; }
+.masthead nav { display: flex; gap: 20px; }
+.masthead nav a { color: var(--ink-dim); text-decoration: none; }
+.masthead nav a:hover { color: var(--ink); }
+.masthead nav a[aria-current="page"] {
+  color: var(--ink); text-decoration: underline;
+  text-decoration-color: var(--accent); text-underline-offset: 5px;
+}
+
+/* ---- hero ---- */
+header.hero-wrap { padding-block: 60px 84px; }
+/* A title-only hero needs far less room under it than the board does. */
+header.hero-wrap.slim { padding-block: 56px 40px; }
+.hero { display: flex; gap: 56px; align-items: center; flex-wrap: wrap; }
+.hero-text { flex: 1 1 400px; }
+h1 {
+  font-size: clamp(34px, 5.4vw, 54px);
+  line-height: 1.06;
+  letter-spacing: -.03em;
+  font-weight: 600;
+  text-wrap: balance;
+  margin-bottom: 22px;
+}
+h1 .px { color: var(--accent); }
+.lede { color: var(--ink-dim); max-width: 44ch; font-size: 18px; }
+.lede.wide { max-width: 56ch; }
+.lede b { color: var(--ink); font-weight: 600; }
+.sectionnote.count { margin-top: 20px; font-family: var(--mono); font-size: 13px; }
+
+/* ---- the living board ---- */
+.board {
+  --cell: clamp(36px, 7.4vw, 50px);
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, var(--cell));
+  grid-auto-rows: var(--cell);
+  border: 6px solid var(--wall-edge);
+  box-shadow: 0 18px 44px -18px rgba(0, 0, 0, .85);
+  flex: 0 0 auto;
+  margin: 0 auto;
+}
+.cell { width: var(--cell); height: var(--cell); background: var(--floor); }
+.cell.alt { background: var(--floor-alt); }
+.cell.wall { background: var(--wall); box-shadow: inset 0 0 0 3px var(--wall-edge); }
+.cell.goalcell::after {
+  content: ""; display: block; width: 46%; height: 46%;
+  margin: 27% auto; outline: 4px solid var(--goal);
+}
+.sprite {
+  position: absolute; width: var(--cell); height: var(--cell);
+  transition: transform .28s steps(4);
+  will-change: transform;
+}
+.crate {
+  width: calc(var(--cell) * .78); height: calc(var(--cell) * .78);
+  background: var(--crate);
+  box-shadow: inset 0 0 0 4px var(--crate-edge), inset 0 0 0 6px var(--crate);
+  border-radius: 2px;
+}
+/* Home: the crate reads as seated by fill and rim, and by the shadow it
+   casts onto the floor — not by a halo hanging in the air around it. */
+.crate.home {
+  background: #cea046;
+  box-shadow: inset 0 0 0 4px var(--goal), inset 0 0 0 6px #cea046,
+              0 3px 8px -1px rgba(70, 30, 20, .6);
+  animation: land .55s steps(3);
+}
+@keyframes land {
+  0% { filter: brightness(1.7); }
+  100% { filter: brightness(1); }
+}
+.dot {
+  width: calc(var(--cell) * .6); height: calc(var(--cell) * .6);
+  background: var(--player); border-radius: 50%;
+}
+.board.snap .sprite { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .sprite { transition: none; }
+  .crate.home { animation: none; }
+  html { scroll-behavior: auto; }
+}
+
+/* ---- sections ---- */
+section { padding-block: 68px; border-top: 1px solid var(--rule); }
+section > * + * { margin-top: 24px; }
+h2 {
+  font-size: 25px; line-height: 1.2; letter-spacing: -.02em;
+  font-weight: 600; color: var(--ink);
+}
+h2 + .sectionnote { margin-top: 10px; }
+.sectionnote { color: var(--ink-dim); font-size: 16px; max-width: 60ch; }
+
+pre {
+  background: #1a1611; border: 1px solid var(--rule);
+  padding: 22px 24px; overflow-x: auto; font-size: 14px; line-height: 1.75;
+  color: var(--ink); tab-size: 2;
+}
+pre .c { color: var(--ink-dim); }
+pre .k { color: var(--accent); }
+
+/* ---- standings table ---- */
+/* Narrow screens scroll the table sideways rather than crushing every name
+   into a five-line stack. A scrollable region has to be keyboard-reachable,
+   hence tabindex="0" on the wrapper in the markup. */
+.lb-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+.lb-scroll:focus-visible { outline: 2px solid var(--player); outline-offset: 4px; }
+table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 14px; }
+.lb-scroll table { min-width: 520px; }
+.lb-scroll.full table { min-width: 760px; }
+.scrollhint {
+  display: none; margin-top: 12px; color: var(--ink-dim);
+  font-family: var(--mono); font-size: 12px;
+}
+th {
+  text-align: left; color: var(--ink-dim); font-weight: 400;
+  font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+  padding: 0 12px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap;
+}
+td { padding: 11px 12px; border-bottom: 1px solid var(--rule-soft); }
+td.name { font-family: var(--sans); font-size: 16px; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.rank { color: var(--ink-dim); width: 1%; }
+tbody tr:first-child td { color: var(--ink); }
+tbody tr:first-child td.rank { color: var(--accent); font-weight: 600; }
+.empty {
+  color: var(--ink-dim); padding: 40px 24px; border: 1px solid var(--rule);
+  background: var(--void-lift); max-width: 52ch;
+}
+.empty b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 6px; }
+
+/* ---- protocol sequence: the order is the information ---- */
+ol.flow { list-style: none; counter-reset: step; }
+ol.flow li { counter-increment: step; padding: 20px 0 20px 46px; position: relative; }
+ol.flow li + li { border-top: 1px solid var(--rule-soft); }
+ol.flow li::before {
+  content: counter(step);
+  position: absolute; left: 0; top: 20px;
+  font-family: var(--mono); font-size: 13px; color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+ol.flow .call { font-family: var(--mono); font-size: 15px; color: var(--accent); }
+ol.flow .why { color: var(--ink-dim); display: block; font-size: 16px; margin-top: 4px; max-width: 62ch; }
+
+/* ---- constraints: a spec sheet, not a row of chips ---- */
+/* No column-gap: the two cells' top borders have to meet, or each row reads
+   as two broken rules instead of one. The gutter lives in dt's padding. */
+dl.spec { display: grid; grid-template-columns: max-content 1fr; }
+dl.spec dt {
+  font-family: var(--mono); font-size: 15px; color: var(--ink);
+  padding: 14px 32px 14px 0; border-top: 1px solid var(--rule-soft);
+  white-space: nowrap;
+}
+dl.spec dd {
+  color: var(--ink-dim); font-size: 16px; max-width: 58ch;
+  padding: 14px 0; border-top: 1px solid var(--rule-soft);
+}
+dl.spec dt:first-of-type, dl.spec dd:first-of-type { border-top: 0; padding-top: 0; }
+
+footer {
+  border-top: 1px solid var(--rule); padding-block: 32px 64px;
+  color: var(--ink-dim); font-family: var(--mono); font-size: 13px;
+}
+footer a { color: var(--ink-dim); }
+footer a:hover { color: var(--ink); }
+
+@media (max-width: 640px) {
+  body { font-size: 16px; }
+  header.hero-wrap { padding-block: 40px 56px; }
+  header.hero-wrap.slim { padding-block: 36px 28px; }
+  .hero { gap: 40px; }
+  section { padding-block: 52px; }
+  footer { padding-block: 28px 48px; }
+  h2 { font-size: 22px; }
+  .lede { font-size: 17px; }
+  pre { padding: 18px; font-size: 13px; }
+  .scrollhint { display: block; }
+  dl.spec { grid-template-columns: 1fr; row-gap: 0; }
+  dl.spec dt { padding: 14px 0 0; white-space: normal; }
+  dl.spec dd { border-top: 0; padding: 2px 0 14px; }
+}

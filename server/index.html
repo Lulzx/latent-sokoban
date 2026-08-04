@@ -5,190 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Latent Sokoban Challenge</title>
 <meta name="description" content="Solve Sokoban from pixels alone. A public benchmark for latent world models, with a live evaluation API and leaderboard.">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23ded6ba'/%3E%3Crect x='1.5' y='1.5' width='13' height='13' fill='none' stroke='%23c43c3c' stroke-width='2'/%3E%3Crect x='4.5' y='4.5' width='7' height='7' fill='%23b07a36' stroke='%23785020' stroke-width='1.5'/%3E%3C/svg%3E">
-<style>
-  :root {
-    --void: #241f19;        /* deep umber: the board's off-grid void */
-    --wall: #5e544a;
-    --wall-edge: #40382f;
-    --floor: #ded6ba;       /* sand */
-    --floor-alt: #d4ccb0;
-    --crate: #b07a36;
-    --crate-edge: #785020;
-    --goal: #c43c3c;
-    --player: #306cbc;
-    --ink: #e8e1cd;         /* sand-tinted text on umber */
-    --ink-dim: #a99f8a;
-    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    background: var(--void);
-    color: var(--ink);
-    font-family: var(--mono);
-    font-size: 15px;
-    line-height: 1.6;
-  }
-  a { color: var(--floor); text-underline-offset: 3px; }
-  a:hover { color: #fff; }
-  :focus-visible { outline: 2px solid var(--player); outline-offset: 2px; }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
-
-  /* ---- hero ---- */
-  header { padding: 56px 0 40px; }
-  .hero { display: flex; gap: 40px; align-items: center; flex-wrap: wrap; }
-  .hero-text { flex: 1 1 380px; }
-  .eyebrow {
-    color: var(--crate); letter-spacing: .22em; text-transform: uppercase;
-    font-size: 12px; margin-bottom: 14px;
-  }
-  h1 {
-    font-size: clamp(28px, 5vw, 44px);
-    line-height: 1.15;
-    letter-spacing: -.01em;
-    font-weight: 700;
-    margin-bottom: 16px;
-  }
-  h1 .px { color: var(--crate); }
-  .sub { color: var(--ink-dim); max-width: 46ch; }
-  .sub b { color: var(--ink); font-weight: 600; }
-
-  /* ---- the living board ---- */
-  .board {
-    --cell: clamp(34px, 7vw, 46px);
-    position: relative;
-    display: grid;
-    grid-template-columns: repeat(6, var(--cell));
-    grid-auto-rows: var(--cell);
-    border: 6px solid var(--wall-edge);
-    box-shadow: 0 0 0 1px #000, 0 24px 60px -20px #000;
-    flex: 0 0 auto;
-    margin: 0 auto;
-  }
-  .cell { width: var(--cell); height: var(--cell); background: var(--floor); }
-  .cell.alt { background: var(--floor-alt); }
-  .cell.wall {
-    background: var(--wall);
-    box-shadow: inset 0 0 0 3px var(--wall-edge);
-  }
-  .cell.goalcell::after {
-    content: ""; display: block; width: 46%; height: 46%;
-    margin: 27% auto; outline: 4px solid var(--goal); outline-offset: 0;
-  }
-  .sprite {
-    position: absolute; width: var(--cell); height: var(--cell);
-    transition: transform .28s steps(4);
-    will-change: transform;
-  }
-  .crate {
-    width: calc(var(--cell) * .78); height: calc(var(--cell) * .78);
-    background: var(--crate);
-    box-shadow: inset 0 0 0 4px var(--crate-edge), inset 0 0 0 6px var(--crate);
-    border-radius: 2px;
-  }
-  .crate.home {
-    background: #cea046;
-    box-shadow: inset 0 0 0 4px var(--goal), inset 0 0 0 6px #cea046,
-                0 0 14px 3px rgba(196, 60, 60, .5);
-    animation: land .55s steps(3);
-  }
-  @keyframes land {
-    0% { filter: brightness(1.7); }
-    100% { filter: brightness(1); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .crate.home { animation: none; }
-  }
-  .dot {
-    width: calc(var(--cell) * .6); height: calc(var(--cell) * .6);
-    background: var(--player); border-radius: 50%;
-  }
-  .board.snap .sprite { transition: none; }
-  @media (prefers-reduced-motion: reduce) {
-    .sprite { transition: none; }
-  }
-
-  /* ---- sections ---- */
-  section { padding: 44px 0; border-top: 1px solid #3a332a; }
-  h2 {
-    font-size: 13px; letter-spacing: .22em; text-transform: uppercase;
-    color: var(--ink-dim); font-weight: 600; margin-bottom: 22px;
-  }
-  h2::before {
-    content: ""; display: inline-block; width: 11px; height: 11px;
-    background: var(--crate); box-shadow: inset 0 0 0 2px var(--crate-edge);
-    margin-right: 10px; vertical-align: -1px;
-  }
-
-  pre {
-    background: #1a1611; border: 1px solid #3a332a; border-left: 3px solid var(--crate);
-    padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.7;
-    color: var(--ink);
-  }
-  pre .c { color: var(--ink-dim); }
-  pre .k { color: #cea046; }
-
-  /* ---- leaderboard ---- */
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th {
-    text-align: left; color: var(--ink-dim); font-weight: 600;
-    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
-    padding: 8px 10px; border-bottom: 1px solid #3a332a;
-  }
-  td { padding: 9px 10px; border-bottom: 1px solid #2e2820; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  tr:first-child td.rank { color: var(--crate); font-weight: 700; }
-  .empty {
-    color: var(--ink-dim); padding: 26px 10px; border: 1px dashed #3a332a;
-    text-align: center;
-  }
-  .lb-scroll { overflow-x: auto; }
-
-  /* ---- how it works ---- */
-  ol.flow { list-style: none; counter-reset: step; }
-  ol.flow li {
-    counter-increment: step;
-    padding: 14px 0 14px 56px; position: relative;
-  }
-  ol.flow li + li { border-top: 1px solid #2e2820; }
-  ol.flow li::before {
-    content: counter(step);
-    position: absolute; left: 0; top: 14px;
-    width: 34px; height: 34px; display: grid; place-items: center;
-    background: var(--floor); box-shadow: inset 0 0 0 3px var(--goal);
-    color: #241f19; font-weight: 700;
-  }
-  ol.flow li:last-child::before {
-    background: var(--crate); box-shadow: inset 0 0 0 3px var(--crate-edge);
-    color: #fff;
-  }
-  ol.flow code { color: #cea046; }
-  ol.flow .why { color: var(--ink-dim); display: block; font-size: 13.5px; }
-
-  /* ---- limits strip ---- */
-  .limits { display: flex; flex-wrap: wrap; gap: 10px; }
-  .limits span {
-    background: var(--floor); color: #4a4234; padding: 7px 13px;
-    font-size: 13px; box-shadow: inset 0 0 0 1px #b8ae8e;
-  }
-  .limits span:nth-child(even) { background: var(--floor-alt); }
-  .limits span b { color: #241f19; font-weight: 700; }
-
-  footer {
-    border-top: 1px solid #3a332a; padding: 30px 0 50px;
-    color: var(--ink-dim); font-size: 13px;
-  }
-</style>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preload" href="/static/fonts/plex-sans-var-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/plex-mono-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/site.css">
 </head>
 <body>
 
-<header class="wrap">
+<div class="wrap masthead">
+  <p class="mark"><b>latent-sokoban</b> — an open benchmark for pixel-based world models</p>
+  <nav>
+    <a href="/" aria-current="page">Overview</a>
+    <a href="/leaderboard">Leaderboard</a>
+    <a href="/api/docs">API</a>
+    <a href="https://github.com/Lulzx/latent-sokoban">GitHub</a>
+  </nav>
+</div>
+
+<header class="wrap hero-wrap">
   <div class="hero">
     <div class="hero-text">
-      <p class="eyebrow">Latent Sokoban Challenge</p>
       <h1>Solve Sokoban from <span class="px">pixels</span> alone.</h1>
-      <p class="sub">Your agent sees two 64×64 images, the board and the goal,
+      <p class="lede">Your agent sees two 64×64 images, the board and the goal,
       and nothing else. No coordinates, no rules, no solver. Learn the world,
       plan in your own latent space, and push every crate home.
       <b>Hidden levels, evaluated live on this server.</b></p>
@@ -198,26 +36,29 @@
   </div>
 </header>
 
-<section class="wrap" id="leaderboard">
-  <h2>Leaderboard</h2>
-  <div class="lb-scroll">
+<section class="wrap" id="standings">
+  <h2>Standings</h2>
+  <p class="sectionnote">Best scorecard per entrant, ranked by success rate.
+    <a href="/leaderboard">See the full leaderboard →</a></p>
+  <div class="lb-scroll" id="lb-top" tabindex="0" role="region"
+       aria-label="Top five standings, scrolls horizontally" hidden>
     <table>
       <thead>
         <tr><th>#</th><th>Name</th><th class="num">Solved</th>
-            <th class="num">Success</th><th class="num">Move eff.</th>
-            <th class="num">Deadlocks</th><th class="num">Date</th></tr>
+            <th class="num">Success</th><th class="num">Move eff.</th></tr>
       </thead>
       <tbody id="lb-body"></tbody>
     </table>
-    <div class="empty" id="lb-empty" hidden>
-      No runs yet. Fifty hidden levels are waiting. Take the first push.
-    </div>
+  </div>
+  <div class="empty" id="lb-empty" hidden>
+    <b>No runs yet.</b>
+    Fifty hidden levels are waiting. Take the first push.
   </div>
 </section>
 
 <section class="wrap">
   <h2>Run your agent</h2>
-  <pre>git clone https://github.com/Lulzx/latent-sokoban && cd latent-sokoban
+  <pre>git clone https://github.com/Lulzx/latent-sokoban &amp;&amp; cd latent-sokoban
 pip install -e .
 
 <span class="c"># once: claim your leaderboard name, get an API key</span>
@@ -233,44 +74,57 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
 
 <section class="wrap">
   <h2>How evaluation works</h2>
+  <p class="sectionnote">Four calls, in this order. The full wire schema lives in
+    <a href="https://github.com/Lulzx/latent-sokoban/blob/main/docs/API.md">docs/API.md</a>.</p>
   <ol class="flow">
-    <li><code>POST /api/scorecards</code> opens a scorecard: one submission attempt.
+    <li><span class="call">POST /api/scorecards</span> opens a scorecard: one submission attempt.
       <span class="why">Authenticated by your API key; the key is your
       leaderboard identity.</span></li>
-    <li><code>…/games/standard/start</code> begins a session over 50 hidden 8×8 levels.
+    <li><span class="call">…/games/standard/start</span> begins a session over 50 hidden 8×8 levels.
       <span class="why">Every frame carries the board and the goal as raw
       64×64×3 bytes. The layouts never leave the server.</span></li>
-    <li><code>POST /api/sessions/{id}/act</code> sends one action: up, down, left, right.
+    <li><span class="call">POST /api/sessions/{id}/act</span> sends one action: up, down, left, right.
       <span class="why">Invalid moves are no-ops that still consume a step.
       80 steps per level.</span></li>
-    <li><code>…/close</code> locks the scorecard and posts it to the leaderboard.
-      <span class="why">Unplayed episodes count as unsolved, so
-      there is no cherry-picking. Completed sessions get a public replay. Full wire
-      schema in <a href="https://github.com/Lulzx/latent-sokoban/blob/main/docs/API.md">docs/API.md</a>.</span></li>
+    <li><span class="call">…/close</span> locks the scorecard and posts it to the leaderboard.
+      <span class="why">Unplayed episodes count as unsolved, so there is no
+      cherry-picking. Completed sessions get a public replay.</span></li>
   </ol>
 </section>
 
 <section class="wrap">
   <h2>The rules that matter</h2>
-  <div class="limits">
-    <span><b>8×8</b> boards, <b>3</b> crates</span>
-    <span><b>64×64</b> RGB observations</span>
-    <span>≤ <b>20M</b> parameters</span>
-    <span>≤ <b>256</b> dynamics calls / action</span>
-    <span><b>No</b> symbolic solvers</span>
-    <span><b>No</b> decode-then-search</span>
-  </div>
-  <p class="sub" style="margin-top:18px">The intent: the winning system plans in a
-  <em>learned</em> representation. Full rules, shared baseline (12% on the warmup split),
-  datasets and local tooling live in the
+  <dl class="spec">
+    <dt>8×8 boards, 3 crates</dt>
+    <dd>Every hidden level in the standard game.</dd>
+
+    <dt>64×64 RGB observations</dt>
+    <dd>The board and the goal, as raw bytes. Nothing symbolic.</dd>
+
+    <dt>≤ 20M parameters</dt>
+    <dd>The whole agent, including any world model.</dd>
+
+    <dt>≤ 256 dynamics calls / action</dt>
+    <dd>Your planning budget for a single move.</dd>
+
+    <dt>No symbolic solvers</dt>
+    <dd>No BFS, A*, or hand-written Sokoban logic anywhere in the loop.</dd>
+
+    <dt>No decode-then-search</dt>
+    <dd>Recovering the grid from pixels and planning on it defeats the point.</dd>
+  </dl>
+  <p class="prose sectionnote">The intent: the winning system plans in a
+  <em>learned</em> representation. Full rules, the shared baseline (12% on the
+  warmup split), datasets and local tooling live in the
   <a href="https://github.com/Lulzx/latent-sokoban">GitHub repo</a>.
   API reference at <a href="/api/docs">/api/docs</a>.</p>
 </section>
 
 <footer class="wrap">
-  latent-sokoban, an open benchmark for pixel-based world models ·
+  latent-sokoban ·
   <a href="https://github.com/Lulzx/latent-sokoban">source</a> ·
-  <a href="/api/spec">spec</a>
+  <a href="/api/spec">spec</a> ·
+  <a href="/leaderboard">leaderboard</a>
 </footer>
 
 <script>
@@ -346,25 +200,34 @@ python scripts/remote_eval.py --agent <span class="k">my_pkg.agent:MyAgent</span
     show((i + states.length - 1) % states.length, true));
 })();
 
-/* ---- leaderboard ---- */
+/* ---- standings preview: top five, full table lives at /leaderboard ---- */
 fetch("/api/leaderboard").then(r => r.json()).then(data => {
-  const body = document.getElementById("lb-body");
-  if (!data.entries.length) {
+  const entries = (data.entries || []).slice(0, 5);
+  if (!entries.length) {
     document.getElementById("lb-empty").hidden = false;
     return;
   }
   const pct = v => (v * 100).toFixed(1) + "%";
-  for (const e of data.entries) {
+  const body = document.getElementById("lb-body");
+  for (const e of entries) {
     const tr = document.createElement("tr");
-    tr.innerHTML =
-      `<td class="rank">${e.rank}</td><td>${e.name.replace(/[<>&]/g, "")}</td>` +
-      `<td class="num">${Math.round(e.success_rate * e.episodes)}/${e.episodes}</td>` +
-      `<td class="num">${pct(e.success_rate)}</td>` +
-      `<td class="num">${e.move_efficiency.toFixed(3)}</td>` +
-      `<td class="num">${pct(e.deadlock_rate)}</td>` +
-      `<td class="num">${e.date}</td>`;
+    tr.insertCell().textContent = e.rank;
+    tr.cells[0].className = "rank";
+    tr.insertCell().textContent = e.name;
+    tr.cells[1].className = "name";
+    const cells = [
+      `${Math.round(e.success_rate * e.episodes)}/${e.episodes}`,
+      pct(e.success_rate),
+      e.move_efficiency.toFixed(3),
+    ];
+    for (const v of cells) {
+      const td = tr.insertCell();
+      td.className = "num";
+      td.textContent = v;
+    }
     body.appendChild(tr);
   }
+  document.getElementById("lb-top").hidden = false;
 }).catch(() => { document.getElementById("lb-empty").hidden = false; });
 </script>
 </body>

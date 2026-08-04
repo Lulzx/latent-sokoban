@@ -41,6 +41,7 @@ from pathlib import Path
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import sys
@@ -449,6 +450,14 @@ def favicon():
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
+app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     return (ROOT / "index.html").read_text()
+
+
+@app.get("/leaderboard", response_class=HTMLResponse)
+def leaderboard_page() -> str:
+    return (ROOT / "leaderboard.html").read_text()
