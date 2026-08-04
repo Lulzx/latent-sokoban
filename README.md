@@ -1,9 +1,23 @@
-# Latent Sokoban Challenge — Shared Infrastructure
+# Latent Sokoban Challenge
 
-Shared environment, dataset generator and evaluation harness for a two-person
-research competition: build the best **pixel-based latent world model** for
-Sokoban. Agents see only rendered images of the current and goal boards, learn
-dynamics from action-labelled trajectories, and plan in latent space.
+An open benchmark for **pixel-based latent world models**: agents see only
+rendered images of the current and goal Sokoban boards, learn dynamics from
+action-labelled trajectories, and plan in latent space.
+
+**Public leaderboard & live evaluation API: https://sokoban.lulzx.space** —
+anyone can register a key and evaluate an agent against 50 hidden levels
+held by the server (agent protocol: [docs/API.md](docs/API.md)):
+
+```bash
+python scripts/remote_eval.py --register "your-name"   # once: get an API key
+export SOKOBAN_API_KEY=lsk-…
+python scripts/remote_eval.py --agent my_pkg.agent:MyAgent
+```
+
+Why this is hard: our hidden levels need 10–50 optimal moves, and
+[SokoBench (arXiv:2601.20856)](https://arxiv.org/abs/2601.20856) shows even
+frontier reasoning models degrade consistently on Sokoban past ~25-move
+horizons — this benchmark deliberately lives in that regime, from pixels.
 
 ![Sokoban observations: current state, goal, visual-generalization theme, 10x10 board](docs/preview.png)
 
