@@ -4,9 +4,9 @@ An open benchmark for **pixel-based latent world models**: agents see only
 rendered images of the current and goal Sokoban boards, learn dynamics from
 action-labelled trajectories, and plan in latent space.
 
-**Public leaderboard & live evaluation API: https://sokoban.lulzx.space.**
-Anyone can register a key and evaluate an agent against 50 hidden levels
-held by the server (agent protocol: [docs/API.md](docs/API.md)):
+**Live at [sokoban.lulzx.space](https://sokoban.lulzx.space)** with a public
+leaderboard and evaluation API. Anyone can register a key and evaluate an
+agent against 100 hidden levels held by the server:
 
 ```bash
 python scripts/remote_eval.py --register "your-name"   # once: get an API key
@@ -14,7 +14,11 @@ export SOKOBAN_API_KEY=lsk-…
 python scripts/remote_eval.py --agent my_pkg.agent:MyAgent
 ```
 
-Why this is hard: our hidden levels need 10–50 optimal moves, and
+Full documentation: **[sokoban.lulzx.space/docs](https://sokoban.lulzx.space/docs/)**
+
+[![The landing page](docs/images/landing.png)](https://sokoban.lulzx.space)
+
+Why this is hard:
 [SokoBench (arXiv:2601.20856)](https://arxiv.org/abs/2601.20856) shows even
 frontier reasoning models degrade consistently on Sokoban past ~25-move
 horizons. This benchmark deliberately lives in that regime, from pixels.
@@ -29,14 +33,33 @@ This repo is the neutral ground both competitors build on: same environment,
 same dataset, same levels, same scoring script. Models and planners live in
 each competitor's own repo.
 
+## The hidden set
+
+100 levels on an 8×8 board, ordered easiest first, generated once from a
+secret seed and never leaving the server:
+
+| Levels | Crates | Optimal solution | Wall density |
+| --- | --- | --- | --- |
+| 1–25 | 1 | 6–18 moves | 0.10 |
+| 26–50 | 2 | 10–28 moves | 0.12 |
+| 51–80 | 3 | 15–31 moves | 0.14 |
+| 81–100 | 4 | 20–42 moves | 0.18 |
+
+Each level's step budget is three times its own optimal solution.
+
+Crate count carries the ramp because solution length cannot: at a fixed 3
+crates on 8×8, sampling 400 levels puts the median optimal solution at 20
+moves and the ceiling near 46, so sliding the length band alone would barely
+separate level 1 from level 100. Each extra crate multiplies the reachable
+state space and the number of ways to deadlock irreversibly. Board size
+stays 8×8 so a 64×64 observation always means the same 8 pixels per tile.
+
+Full measurements and rationale: [level generation](https://sokoban.lulzx.space/docs/level-generation/).
+
 ## Anti-brute-force design
 
 The benchmark is deliberately sized so that brute force loses:
 
-- **Official config is 8×8 with 3 boxes** (~250k reachable states). The
-  state graph cannot be exhausted within the planning budget, so search must
-  be guided by a learned heuristic. A 6×6 one-box warmup (Split W) exists
-  for the baseline round only and is never scored.
 - **Planning is budgeted in counted dynamics calls, not wall-clock**: at
   most **256 learned-dynamics calls per action** (one call = one predicted
   transition of one candidate state; a batch of B rolled H steps costs
@@ -47,26 +70,55 @@ The benchmark is deliberately sized so that brute force loses:
   an exact symbolic board at inference time or run graph search over
   enumerated discrete states, whether the decoder or transition function
   was hand-coded or learned. See [docs/RULES.md](docs/RULES.md).
+- **Unplayed episodes count as unsolved.** Closing a scorecard pads the
+  results to the full 100 with failures, so stopping a bad run early does
+  not help and no favourable subset can be cherry-picked.
+
+## The site
+
+| Page | What it is |
+| --- | --- |
+| [`/`](https://sokoban.lulzx.space) | Overview, quickstart, rules |
+| [`/leaderboard`](https://sokoban.lulzx.space/leaderboard) | Standings, with every metric defined |
+| [`/play`](https://sokoban.lulzx.space/play) | Play Sokoban in the browser |
+| [`/docs`](https://sokoban.lulzx.space/docs/) | Full documentation |
+| [`/api/docs`](https://sokoban.lulzx.space/api/docs) | Swagger UI for the evaluation API |
+
+| Leaderboard | Play |
+| --- | --- |
+| [![Leaderboard](docs/images/leaderboard.png)](https://sokoban.lulzx.space/leaderboard) | [![The browser game](docs/images/play.png)](https://sokoban.lulzx.space/play) |
+
+`/play` runs 52 classic levels from
+[morenod/sokoban](https://github.com/morenod/sokoban) (MIT), ordered easiest
+first, with keyboard, swipe and on-screen controls, unlimited undo, and
+progress kept in local storage. These are **not** the benchmark levels; the
+hidden set is separate and stays on the server.
+
+Board art is [Kenney's Sokoban pack](https://www.kenney.nl/assets/sokoban)
+(CC0).
 
 ## What's here
 
 | Component | Where | Notes |
 | --- | --- | --- |
-| Environment | `latent_sokoban/env.py` | Deterministic Sokoban (official: 8×8, 3 boxes, 80-step limit), 4 actions, invalid actions are no-ops, ASCII level format |
+| Environment | `latent_sokoban/env.py` | Deterministic Sokoban (8×8, 1–4 crates), 4 actions, invalid actions are no-ops, ASCII level format |
 | Renderer | `latent_sokoban/render.py` | Pure-numpy 64×64 RGB, themeable for visual generalization |
-| Level generator | `latent_sokoban/levels.py` | Rejection sampling against a BFS solver; every level is solvable, difficulty controlled by optimal-length band |
+| Level generator | `latent_sokoban/levels.py` | Rejection sampling against a BFS solver; every level solvable, plus the hidden set's difficulty ramp |
 | Solver | `latent_sokoban/solver.py` | Optimal BFS + deadlock detection (data generation and eval analysis only; never available to agents) |
 | Dataset generator | `latent_sokoban/dataset.py`, `scripts/generate_dataset.py` | 50% random / 30% solver / 20% perturbed-solver trajectories, sharded `.npz` |
-| Benchmark splits | `scripts/generate_levels.py` | Warmup W + splits A–D (+ optional E), including the hidden-test-set protocol |
-| Evaluation harness | `latent_sokoban/evaluation.py`, `scripts/evaluate.py` | Deterministic, multi-seed, enforces the dynamics-call budget, reports all official metrics |
+| Benchmark splits | `scripts/generate_levels.py` | Warmup W + splits A–D (+ optional E) |
+| Hidden set | `scripts/generate_hidden.py` | Builds the 100-level ramp from a secret seed |
+| Evaluation harness | `latent_sokoban/evaluation.py`, `scripts/evaluate.py` | Deterministic, multi-seed, enforces the dynamics-call budget |
 | Agent interface | `latent_sokoban/agent.py` | The only contract competitors implement, including the `CallMeter` |
-| Shared baseline | `baseline/` | The rulebook's required baseline: CNN encoder, 128-d latent, residual MLP dynamics, VICReg-style regularization, beam-search MPC (needs PyTorch) |
-| Scoring script | `scripts/score.py` | The official 100-point formula (45S+20G+10M+10P+10D+5R) computed from evaluation results |
-| Hidden-test commitment | `scripts/hidden_test.py` | Encrypt-and-commit a secret generation seed; verified reveal after submissions freeze |
-| Visualizer | `scripts/visualize.py` | Rollout contact sheets (agent or optimal solver) + per-step metadata for reports and the live final |
+| Shared baseline | `baseline/` | CNN encoder, 128-d latent, residual MLP dynamics, VICReg-style regularization, beam-search MPC (needs PyTorch) |
+| Evaluation API and site | `server/` | FastAPI app, landing page, leaderboard, game, docs hosting |
+| Play level builder | `scripts/build_play_levels.py` | Parses the classic ASCII set into JSON for `/play` |
+| Scoring script | `scripts/score.py` | The official 100-point formula (45S+20G+10M+10P+10D+5R) |
+| Hidden-test commitment | `scripts/hidden_test.py` | Encrypt-and-commit a secret generation seed |
+| Visualizer | `scripts/visualize.py` | Rollout contact sheets + per-step metadata |
 
 The infrastructure's only dependency is numpy; the optional baseline adds
-PyTorch.
+PyTorch, and the server adds FastAPI.
 
 ## Quickstart
 
@@ -136,8 +188,14 @@ warmup levels / 20 Split-A levels, 3 evaluation seeds):
 
 | Agent | Split W (6×6, 1 box) | Split A (8×8, 3 boxes) | Plan time | Calls/action |
 | --- | --- | --- | --- | --- |
-| Random | 4% | 0% | — | 0 |
+| Random | 4% | 0% | - | 0 |
 | Baseline | **12%** | **0%** | 3.6 ms | 84 |
+
+This is also what calibrates the hidden set's ramp. Tier 1 (8×8, one crate)
+sits between splits W and A, so the opening levels are not free but are
+reachable; the closing tiers are out of reach of anything published. A
+benchmark where every entrant scores zero everywhere gives no gradient to
+improve against.
 
 Two findings from instrumenting this baseline, so competitors don't
 rediscover them:
@@ -157,13 +215,9 @@ rediscover them:
   noise (η = 0.2) to plan scores to break loops. Learned value/distance
   functions that understand detours are the second obvious direction.
 
-The 0% on the official 8×8 three-box config is the point of the
-competition: the baseline verifies the pipeline end-to-end (training
-doesn't collapse, latent std ≈ 1.0; planning runs within budget;
-evaluation is deterministic), and everything above 0% on Split A is
-earned by research.
-
 ## Benchmark splits
+
+These public splits are for development and are separate from the hidden set:
 
 | Split | Purpose | Configuration |
 | --- | --- | --- |
@@ -177,9 +231,11 @@ earned by research.
 The harness reports, per split, averaged over evaluation seeds: **success
 rate** (primary metric), **move efficiency** (optimal ÷ agent moves, solved
 levels only), **planning time** per action, **model calls** per action
-(average, max, and cap violations), and **deadlock rate** (fraction of
-episodes that entered a provably dead state, checked exactly with a bounded
-BFS after every push).
+(average, max, and cap violations), and **deadlock rate**.
+
+Note the live server's deadlock rate is a **lower bound**: it uses a cheap
+corner test rather than the exact bounded BFS, because the exact check would
+block the request path. See [scoring](https://sokoban.lulzx.space/docs/scoring/).
 
 ## Dataset format
 
@@ -195,15 +251,31 @@ perturbed) and the ASCII levels for reproducibility. See
 ## Hidden test set protocol
 
 1. Freeze this repo at an agreed tag; agree on generation constraints.
-2. One competitor (or a trusted third party) runs `scripts/generate_levels.py`
-   once per split with a **secret seed**.
+2. One competitor (or a trusted third party) runs `scripts/generate_hidden.py`
+   with a **secret seed**.
 3. Store the seed in a password-protected archive. Nobody inspects the
    generated files.
 4. Reveal the password only after both submissions are frozen, regenerate,
-   and run `scripts/evaluate.py` on both submissions on the same machine.
+   and run the evaluation on both submissions on the same machine.
 
 Because generation is fully determined by `(script, constraints, seed)`, the
 seed alone is a commitment to the exact test levels.
+
+## Running the server
+
+```bash
+pip install -e ".[docs]"
+python scripts/generate_hidden.py --seed 123 --out server/hidden_levels.json
+mkdocs build
+SOKOBAN_SEED=123 uvicorn server.app:app --port 8321
+```
+
+Generating the hidden set takes about 70 seconds, nearly all of it in the
+4-crate tier. The server will do it at boot if the file is missing, but the
+API is unreachable while it does.
+
+Operational detail, environment variables and deployment:
+[running the server](https://sokoban.lulzx.space/docs/operations/).
 
 ## Competition rules (summary)
 
@@ -213,6 +285,12 @@ per action, ≤256 counted dynamics calls per action, shared training seeds
 {13, 42, 137}, scores averaged over ≥3 evaluation seeds. Final score:
 45% standard success, 20% generalization, 10% move efficiency, 10% planning
 speed, 10% deadlock avoidance, 5% reproducibility.
+
+## Credits
+
+- Board art: [Kenney](https://www.kenney.nl/assets/sokoban) (CC0)
+- `/play` levels: [morenod/sokoban](https://github.com/morenod/sokoban) (MIT)
+- Typeface: [IBM Plex](https://github.com/IBM/plex) (OFL 1.1)
 
 ## License
 
