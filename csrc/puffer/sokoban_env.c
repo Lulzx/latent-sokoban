@@ -16,7 +16,9 @@ int main(int argc, char** argv) {
     int steps = (argc > 1) ? atoi(argv[1]) : 200000;
 
     unsigned char observations[SK_OBS_BYTES];
-    float actions[1], rewards[1], terminals[1];
+    int actions[1];
+    float rewards[1];
+    unsigned char terminals[1];
 
     SokobanEnv env = {0};
     env.observations = observations;
@@ -46,9 +48,9 @@ int main(int argc, char** argv) {
 
     t0 = clock();
     for (int i = 0; i < steps; i++) {
-        actions[0] = (float)(rand_r(&rng) % N_ACTIONS);
+        actions[0] = rand_r(&rng) % N_ACTIONS;
         c_step(&env);
-        if (terminals[0] > 0.5f) {
+        if (terminals[0]) {
             episodes++;
             if (rewards[0] > 0.5f) solved++;
         }

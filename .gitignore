@@ -15,3 +15,10 @@ site/
 csrc/*.dylib
 csrc/*.so
 csrc/*.o
+
+csrc/puffer/build/
+csrc/puffer/*.so
+
+# pufferlib symlinks these into the cwd on import
+resources
+csrc/puffer/resources

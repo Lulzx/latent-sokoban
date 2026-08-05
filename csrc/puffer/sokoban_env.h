@@ -34,10 +34,13 @@ typedef struct {
 
 typedef struct {
     Log log;                        /* Required */
+    /* Types must match pufferlib 3.0's env_binding.h: int* for discrete
+     * actions, unsigned char* for terminals. Getting these wrong compiles
+     * fine and misreads the buffers at runtime. */
     unsigned char* observations;    /* Required */
-    float* actions;                 /* Required */
+    int* actions;                   /* Required (discrete) */
     float* rewards;                 /* Required */
-    float* terminals;               /* Required */
+    unsigned char* terminals;       /* Required */
     int num_agents;
 
     /* level pool, shared shape but per-env storage */
@@ -128,9 +131,9 @@ void c_reset(SokobanEnv* env) {
 void c_step(SokobanEnv* env) {
     env->tick += 1;
     env->rewards[0] = 0.0f;
-    env->terminals[0] = 0.0f;
+    env->terminals[0] = 0;
 
-    int action = (int)env->actions[0];
+    int action = env->actions[0];
     if (action < 0) action = 0;
     if (action >= N_ACTIONS) action = N_ACTIONS - 1;
 
@@ -140,13 +143,13 @@ void c_step(SokobanEnv* env) {
 
     if (sk_solved(&env->level, &env->state)) {
         env->rewards[0] = 1.0f;
-        env->terminals[0] = 1.0f;
+        env->terminals[0] = 1;
         add_log(env);
         c_reset(env);
         return;
     }
     if (env->tick >= env->max_steps) {
-        env->terminals[0] = 1.0f;
+        env->terminals[0] = 1;
         add_log(env);
         c_reset(env);
         return;
