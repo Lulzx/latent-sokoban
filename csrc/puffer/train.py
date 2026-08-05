@@ -34,6 +34,63 @@ import pufferlib.vector
 from sokoban import IMG, OBS_BYTES, Sokoban
 
 
+class DistilledPolicy(nn.Module):
+    """Warm start from distill/checkpoint.pt.
+
+    Mirrors distill/model.py exactly, because that is what makes the weights
+    loadable: one 3-channel encoder applied SEPARATELY to the observation and
+    the goal, then a trunk over the concatenated pair. The stacked 6-channel
+    encoder used by SokobanPolicy cannot accept those weights at all.
+
+    The policy head transfers; THE VALUE HEAD DOES NOT. The distilled value
+    predicts log1p(moves-to-go) -- lower is better and it is unbounded above
+    -- whereas PPO wants a discounted return where higher is better. Loading
+    it would hand the critic a sign-flipped target, so it is reinitialised and
+    only the encoder, trunk and policy head are restored.
+    """
+
+    def __init__(self, env, checkpoint="distill/checkpoint.pt", freeze=False):
+        super().__init__()
+        from distill.model import DistillModel
+        self.is_continuous = False
+        self.hidden_size = 256
+
+        model = DistillModel()
+        ckpt = Path(checkpoint)
+        if ckpt.exists():
+            state = torch.load(ckpt, map_location="cpu", weights_only=True)
+            model.load_state_dict(state["model"])
+            print(f"warm start from {ckpt}")
+        else:
+            print(f"WARNING: {ckpt} missing; training from scratch")
+
+        self.encoder = model.encoder
+        self.trunk = model.heads.trunk
+        self.actor = model.heads.policy          # 4 logits, already trained
+        self.value = nn.Linear(self.hidden_size, 1)   # fresh: see docstring
+
+        if freeze:
+            for p in self.encoder.parameters():
+                p.requires_grad = False
+
+    def encode_observations(self, observations, state=None):
+        x = observations.reshape(-1, 2, IMG, IMG, 3).float() / 255.0
+        x = x.permute(0, 1, 4, 2, 3)             # (B, 2, C, H, W)
+        z = self.encoder(x[:, 0])
+        z_goal = self.encoder(x[:, 1])
+        return self.trunk(torch.cat([z, z_goal], dim=-1)), None
+
+    def decode_actions(self, hidden, lookup=None):
+        return self.actor(hidden), self.value(hidden)
+
+    def forward(self, observations, state=None):
+        hidden, _ = self.encode_observations(observations)
+        return self.decode_actions(hidden)
+
+    def forward_eval(self, observations, state=None):
+        return self.forward(observations, state)
+
+
 class SokobanPolicy(nn.Module):
     """Conv encoder over the (observation, goal) pair.
 
@@ -129,6 +186,12 @@ def main():
     ap.add_argument("--device", default=(
         "cuda" if torch.cuda.is_available()
         else "mps" if torch.backends.mps.is_available() else "cpu"))
+    ap.add_argument("--from-distilled", action="store_true",
+                    help="warm start encoder/trunk/policy from "
+                         "distill/checkpoint.pt")
+    ap.add_argument("--freeze-encoder", action="store_true",
+                    help="train only the heads; keeps the distilled "
+                         "representation fixed")
     ap.add_argument("--optimizer", default=None,
                     help="override; muon comes from heavyball and is CUDA-"
                          "oriented, so mps/cpu fall back to adam")
@@ -156,7 +219,11 @@ def main():
 
     vecenv = pufferlib.vector.make(make_env, env_kwargs=env_kwargs,
                                    backend=pufferlib.vector.Serial)
-    policy = SokobanPolicy(vecenv.driver_env).to(args.device)
+    if args.from_distilled:
+        policy = DistilledPolicy(vecenv.driver_env,
+                                 freeze=args.freeze_encoder).to(args.device)
+    else:
+        policy = SokobanPolicy(vecenv.driver_env).to(args.device)
     n_params = sum(p.numel() for p in policy.parameters())
     print(f"policy parameters: {n_params:,} (RULES.md cap 20,000,000)")
 
