@@ -172,9 +172,15 @@ def run_parallel(client: "Client", args, sid: str, frame: dict) -> dict:
     agents: dict[int, object] = {}
     history: dict[int, list[int]] = {}
     obs: dict[int, dict] = {}
+    retired: set[int] = set()
 
     def adopt(ep: dict) -> None:
+        # Responses within a round are concurrent, so the episodes list on any
+        # one of them can predate another episode finishing. Without `retired`
+        # a stale list resurrects a closed episode and the next act 409s.
         i = ep["index"]
+        if i in retired:
+            return
         if i not in agents:
             agents[i] = load_agent(args.agent)
             history[i] = []
@@ -209,6 +215,7 @@ def run_parallel(client: "Client", args, sid: str, frame: dict) -> dict:
                 last = fr.get("last") or {}
                 if last.get("episode_done"):
                     print("+" if last.get("solved") else ".", end="", flush=True)
+                    retired.add(i)
                     obs.pop(i, None)
                     agents.pop(i, None)
                     history.pop(i, None)

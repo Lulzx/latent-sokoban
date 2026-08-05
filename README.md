@@ -11,8 +11,14 @@ agent against 100 hidden levels held by the server:
 ```bash
 python scripts/remote_eval.py --register "your-name"   # once: get an API key
 export SOKOBAN_API_KEY=lsk-…
-python scripts/remote_eval.py --agent my_pkg.agent:MyAgent
+python scripts/remote_eval.py --agent my_pkg.agent:MyAgent --parallel 25
 ```
+
+`--parallel` runs that many episodes of the current difficulty tier at once,
+which takes a full run from roughly 74 minutes to 5 — a serial run is bound
+by network round trips, not by your agent. Harder tiers still wait for
+easier ones to finish. Omit it for the original one-episode-at-a-time
+protocol; see [docs/API.md](docs/API.md).
 
 Full documentation: **[sokoban.lulzx.space/docs](https://sokoban.lulzx.space/docs/)**
 

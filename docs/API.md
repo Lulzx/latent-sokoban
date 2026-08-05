@@ -54,6 +54,57 @@ episode counts as unsolved, so partial runs can't cherry-pick easy levels.
 Opening a scorecard is what counts against your daily allowance, not
 closing it, so abandoning a run mid-way does not buy a free retry.
 
+## Running episodes concurrently
+
+By default a session plays one episode at a time. That makes a run bound by
+network latency rather than by your agent: 100 levels is roughly 6,000
+actions, and at a 190 ms round trip that is over an hour, of which the agent
+itself accounts for a few milliseconds per action.
+
+Pass `parallel` on `start` to put several episodes of the **current tier**
+in flight at once (maximum 32):
+
+```
+POST /api/scorecards/{sid}/games/standard/start?parallel=25
+```
+
+A tier is a run of levels sharing a crate count — for `standard` that is
+levels 1–25, 26–50, 51–80, 81–100. **A harder tier does not open until every
+episode of the current one has finished**, so a run is still evaluated in
+difficulty order and you cannot skip ahead to sample the whole set.
+
+With `parallel > 1` the Frame carries an `episodes` array instead of a
+single `episode`, and every `act` must name which episode it applies to:
+
+```jsonc
+{
+  "state": "IN_PROGRESS",
+  "episodes": [                      // one entry per in-flight episode
+    { "index": 3, "of": 100, "steps_used": 7, "max_steps": 30,
+      "observation": { "obs": "…", "goal": "…", "shape": [64, 64, 3] } }
+  ],
+  "tier":     { "index": 0, "of": 4, "range": [0, 25] },
+  "finished": 12,                    // episodes recorded so far
+  "acted_episode": 3,
+  "last":     { "action": 2, "episode": 3, "episode_done": false }
+}
+```
+
+Two things to get right. Responses within a round arrive concurrently, so
+the `episodes` array on one of them can predate another episode finishing —
+track which episodes you have seen end and do not act on them again, or the
+next `act` returns `409`. And one HTTP connection carries one request at a
+time, so genuine concurrency needs a connection per worker rather than one
+shared socket.
+
+`parallel=1` is the default and is exactly the protocol described in the
+rest of this document: single `episode` object, no `episode` field on `act`.
+Existing clients need no changes.
+
+This affects wall-clock only. The levels, step budgets, call budget and
+scoring are identical either way; `scripts/remote_eval.py --parallel 25`
+took a full 100-level run from ~74 minutes to ~5.
+
 ## The Frame object
 
 Every `start` and `act` response is a Frame:
@@ -96,7 +147,8 @@ img = np.frombuffer(base64.b64decode(o["obs"]), dtype=np.uint8).reshape(o["shape
 
 ```
 POST /api/sessions/{gid}/act
-{ "action": 0 }        # 0 up, 1 down, 2 left, 3 right
+{ "action": 0 }               # 0 up, 1 down, 2 left, 3 right
+{ "action": 0, "episode": 3 } # required when several are in flight
 ```
 
 Invalid moves (into a wall, blocked push) are no-op transitions that
@@ -106,7 +158,17 @@ first observation (`last.episode_done: true`, `episode.index` bumped);
 call `Agent.reset()` client-side on that signal.
 
 Errors: `401` bad key, `404` unknown/expired session (sessions expire
-after 60 min idle), `409` session already over, `422` bad action.
+after 60 min idle), `409` session already over or the named episode is not
+in flight, `422` bad action. `400` means several episodes are open and you
+did not say which one to act on.
+
+Clients should retry network faults, `429` and `5xx` rather than aborting: a
+run is thousands of requests, so a transient reset is likely rather than
+exceptional, and dying mid-run leaves the scorecard open — which scores
+nothing, however well the run was going. Retrying `close` matters most.
+Note that retrying `act` after a lost *response* replays the action, since
+the API takes no idempotency key; the returned Frame is still the true state
+and replanning from it costs a step rather than the episode.
 
 ## The Score object
 
