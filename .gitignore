@@ -11,3 +11,7 @@ server/leaderboard.db
 server/hidden_levels.json
 site/
 .DS_Store
+
+csrc/*.dylib
+csrc/*.so
+csrc/*.o
