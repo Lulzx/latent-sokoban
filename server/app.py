@@ -60,6 +60,10 @@ GAMES = ("standard",)
 SESSION_TTL = 3600
 MAX_ACTIVE_SESSIONS = 200
 MAX_SESSIONS_PER_KEY = 3
+# Ceiling on episodes in flight per session. A tier is at most 30 levels, so
+# this lets a whole tier run at once without letting one client pin the
+# serving lock with an unbounded fan-out.
+MAX_PARALLEL = 32
 MAX_KEYS_PER_IP_PER_DAY = 5
 # Counts scorecards *opened*, not closed. Opening is what exposes the hidden
 # levels, so an uncapped open is free reconnaissance no matter how few runs
@@ -170,59 +174,137 @@ def _b64(img: np.ndarray) -> str:
         np.ascontiguousarray(img, dtype=np.uint8).tobytes()).decode()
 
 
-def _frame(session: dict, last: dict | None = None) -> dict:
-    level: Level = session["level"]
-    env: SokobanEnv = session["env"]
-    state = "GAME_OVER" if session["done"] else "IN_PROGRESS"
-    frame = {
-        "session_id": session["id"],
-        "game": session["game"],
-        "state": state,
-        "episode": {
-            "index": min(session["episode"], len(LEVELS) - 1),
-            "of": len(LEVELS),
-            "steps_used": env.state.steps,
-            "max_steps": env.max_steps,
-        },
-        "observation": None if session["done"] else {
-            "obs": _b64(render(level, env.state)),
+def _slot_view(slot: dict) -> dict:
+    env: SokobanEnv = slot["env"]
+    return {
+        "index": slot["index"],
+        "of": len(LEVELS),
+        "steps_used": env.state.steps,
+        "max_steps": env.max_steps,
+        "observation": {
+            "obs": _b64(render(slot["level"], env.state)),
             # constant for the episode, so rendered and encoded once at its
             # start rather than on every action
-            "goal": session["goal_b64"],
+            "goal": slot["goal_b64"],
             "shape": [64, 64, 3],
             "dtype": "uint8",
             "encoding": "base64-raw",
         },
-        "last": last,
     }
+
+
+def _frame(session: dict, last: dict | None = None,
+           focus: int | None = None) -> dict:
+    """Serial clients get exactly the old shape; parallel ones get a list.
+
+    Keeping the single-episode layout byte-for-byte matters: every existing
+    entrant's client reads frame["episode"] and frame["observation"], and a
+    protocol that quietly changed under them would invalidate their runs
+    rather than speed them up.
+    """
+    state = "GAME_OVER" if session["done"] else "IN_PROGRESS"
+    frame = {"session_id": session["id"], "game": session["game"],
+             "state": state, "last": last}
+
+    if session["parallel"] == 1:
+        slot = None if session["done"] else next(iter(session["slots"].values()))
+        view = _slot_view(slot) if slot else None
+        frame["episode"] = {
+            "index": (view["index"] if view
+                      else min(session["finished"], len(LEVELS) - 1)),
+            "of": len(LEVELS),
+            "steps_used": view["steps_used"] if view else 0,
+            "max_steps": view["max_steps"] if view else 0,
+        }
+        frame["observation"] = view["observation"] if view else None
+    else:
+        views = [_slot_view(s) for s in session["slots"].values()]
+        views.sort(key=lambda v: v["index"])
+        frame["episodes"] = views
+        frame["tier"] = {"index": session["tier"], "of": len(TIERS),
+                         "range": list(TIERS[session["tier"]])}
+        frame["finished"] = session["finished"]
+        if focus is not None:
+            frame["acted_episode"] = focus
+
     if session["done"]:
-        frame["result"] = _game_summary(session["results"])
+        frame["result"] = _game_summary(_ordered_results(session))
     return frame
 
 
-def _start_episode(session: dict) -> None:
-    entry = LEVELS[session["episode"]]
-    session["level"] = Level.from_ascii(entry["ascii"])
-    session["env"] = SokobanEnv(session["level"], max_steps=entry["max_steps"])
-    session["env"].reset()
-    session["goal_b64"] = _b64(render_goal(session["level"]))
-    session["pushed_any"] = False
-    session["actions"] = []
+def _tiers() -> list[tuple[int, int]]:
+    """Contiguous [start, end) index ranges, one per crate count.
+
+    The hidden set is a 1-2-3-4 crate ramp, so a tier is just a run of equal
+    n_crates. Levels without the field degrade to a single tier, which is the
+    serial behaviour.
+    """
+    spans, start = [], 0
+    for i in range(1, len(LEVELS) + 1):
+        if (i == len(LEVELS)
+                or LEVELS[i].get("n_crates") != LEVELS[start].get("n_crates")):
+            spans.append((start, i))
+            start = i
+    return spans
 
 
-def _finish_episode(session: dict) -> None:
-    env: SokobanEnv = session["env"]
-    entry = LEVELS[session["episode"]]
+TIERS = _tiers()
+
+
+def _open_episode(session: dict, idx: int) -> None:
+    """Put episode `idx` in flight. Several may be open at once."""
+    entry = LEVELS[idx]
+    level = Level.from_ascii(entry["ascii"])
+    env = SokobanEnv(level, max_steps=entry["max_steps"])
+    env.reset()
+    session["slots"][idx] = {
+        "index": idx, "level": level, "env": env,
+        "goal_b64": _b64(render_goal(level)),
+        "pushed_any": False, "actions": [],
+    }
+
+
+def _close_episode(session: dict, idx: int) -> None:
+    slot = session["slots"].pop(idx)
+    env: SokobanEnv = slot["env"]
+    entry = LEVELS[idx]
     solved = env.solved
     # cheap corner test only: the exact BFS check would block the serving
     # lock for seconds. This undercounts, so the metric is a lower bound.
-    deadlocked = (not solved and session["pushed_any"]
-                  and is_deadlocked(session["level"], env.state.boxes))
-    session["results"].append({
+    deadlocked = (not solved and slot["pushed_any"]
+                  and is_deadlocked(slot["level"], env.state.boxes))
+    session["results"][idx] = {
         "solved": solved, "steps": env.state.steps,
         "optimal": entry["optimal_len"], "deadlocked": deadlocked,
-        "actions": "".join("UDLR"[a] for a in session["actions"])})
-    session["episode"] += 1
+        "actions": "".join("UDLR"[a] for a in slot["actions"])}
+    session["finished"] += 1
+
+
+def _refill(session: dict) -> None:
+    """Top the current tier back up, and only advance once it is fully done.
+
+    Tier-gating is the point: episodes inside a tier run concurrently, but a
+    harder tier never starts while an easier one is unfinished, so a run is
+    still evaluated in difficulty order.
+    """
+    while True:
+        start, end = TIERS[session["tier"]]
+        while len(session["slots"]) < session["parallel"] and session["next"] < end:
+            _open_episode(session, session["next"])
+            session["next"] += 1
+        if session["slots"]:
+            return
+        if session["next"] < end:          # room left in tier, loop to fill
+            continue
+        if session["tier"] + 1 >= len(TIERS):
+            session["done"] = True
+            return
+        session["tier"] += 1
+        session["next"] = TIERS[session["tier"]][0]
+
+
+def _ordered_results(session: dict) -> list[dict]:
+    return [session["results"][i] for i in sorted(session["results"])]
 
 
 def _game_summary(results: list[dict], pad_to: int | None = None) -> dict:
@@ -262,6 +344,9 @@ class NewKey(BaseModel):
 class Act(BaseModel):
     action: int = Field(..., ge=0, le=3,
                         description="0 up, 1 down, 2 left, 3 right")
+    episode: int | None = Field(
+        None, description="which in-flight episode to act on; omit when the "
+                          "session was opened serially (parallel=1)")
 
 
 @app.get("/api/spec")
@@ -344,8 +429,15 @@ def open_scorecard(request: Request,
 
 
 @app.post("/api/scorecards/{sid}/games/{game}/start")
-def start_game(sid: str, game: str,
+def start_game(sid: str, game: str, parallel: int = 1,
                x_api_key: str | None = Header(None)) -> dict:
+    """`parallel` puts up to that many episodes of the current tier in flight.
+
+    Default 1 is the original serial protocol. Higher values exist because a
+    run is otherwise bounded by round-trip latency rather than by the agent:
+    ~6800 sequential actions at ~190 ms of network is over an hour, of which
+    the agent itself accounts for well under a minute.
+    """
     name = _auth(x_api_key)
     if game not in GAMES:
         raise HTTPException(404, f"unknown game; available: {list(GAMES)}")
@@ -369,9 +461,11 @@ def start_game(sid: str, game: str,
         card["touched"] = now
         gid = "gs-" + secrets.token_urlsafe(16)
         session = {"id": gid, "scorecard": sid, "name": name, "game": game,
-                   "episode": 0, "results": [], "done": False,
-                   "created": now, "touched": now}
-        _start_episode(session)
+                   "slots": {}, "results": {}, "finished": 0, "tier": 0,
+                   "next": TIERS[0][0], "parallel": max(1, min(parallel,
+                                                               MAX_PARALLEL)),
+                   "done": False, "created": now, "touched": now}
+        _refill(session)
         _sessions[gid] = session
         card["games"][game] = gid
         return _frame(session)
@@ -387,17 +481,35 @@ def act(gid: str, body: Act, x_api_key: str | None = Header(None)) -> dict:
         if session["done"]:
             raise HTTPException(409, "session is over")
         session["touched"] = time.time()
-        env: SokobanEnv = session["env"]
+
+        # Serial clients send no episode id and there is only one slot open,
+        # so the old request body keeps working untouched.
+        if body.episode is None:
+            if len(session["slots"]) != 1:
+                raise HTTPException(
+                    400, "several episodes are in flight; name one with "
+                         f"\"episode\": {sorted(session['slots'])}")
+            idx = next(iter(session["slots"]))
+        else:
+            idx = body.episode
+            if idx not in session["slots"]:
+                raise HTTPException(
+                    409, f"episode {idx} is not in flight; open episodes are "
+                         f"{sorted(session['slots'])}")
+
+        slot = session["slots"][idx]
+        env: SokobanEnv = slot["env"]
         _, done, info = env.step(body.action)
-        session["actions"].append(body.action)
+        slot["actions"].append(body.action)
         if info.pushed:
-            session["pushed_any"] = True
+            slot["pushed_any"] = True
         last = {"action": body.action, "moved": info.moved,
-                "solved": bool(env.solved), "episode_done": bool(done)}
+                "solved": bool(env.solved), "episode_done": bool(done),
+                "episode": idx}
         if done:
-            _finish_episode(session)
-            if session["episode"] >= len(LEVELS):
-                session["done"] = True
+            _close_episode(session, idx)
+            _refill(session)
+            if session["done"]:
                 conn = _db()
                 with conn:
                     conn.execute(
@@ -406,11 +518,9 @@ def act(gid: str, body: Act, x_api_key: str | None = Header(None)) -> dict:
                          time.time(), json.dumps([
                              {k: r[k] for k in
                               ("solved", "steps", "optimal", "deadlocked",
-                               "actions")} for r in session["results"]])))
+                               "actions")} for r in _ordered_results(session)])))
                 conn.close()
-            else:
-                _start_episode(session)
-        return _frame(session, last=last)
+        return _frame(session, last=last, focus=idx)
 
 
 @app.get("/api/scorecards/{sid}")
@@ -423,7 +533,7 @@ def scorecard_state(sid: str, x_api_key: str | None = Header(None)) -> dict:
         games = {}
         for game, gid in card["games"].items():
             s = _sessions.get(gid)
-            games[game] = (_game_summary(s["results"]) if s
+            games[game] = (_game_summary(_ordered_results(s)) if s
                            else {"status": "expired"})
             if s:
                 games[game]["status"] = "done" if s["done"] else "in_progress"
@@ -439,7 +549,7 @@ def close_scorecard(sid: str, x_api_key: str | None = Header(None)) -> dict:
             raise HTTPException(404, "unknown or expired scorecard")
         gid = card["games"].get("standard")
         session = _sessions.pop(gid, None) if gid else None
-        results = session["results"] if session else []
+        results = _ordered_results(session) if session else []
     # unplayed episodes count as unsolved: closing locks the data
     summary = _game_summary(results, pad_to=len(LEVELS))
     conn = _db()
