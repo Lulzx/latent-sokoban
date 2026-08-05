@@ -10,9 +10,15 @@ baseline does; the symbolic solver appears only in distill/generate.py, which
 RULES.md permits for training-data generation.
 
 Budget: horizon 3 with beam 16 costs 4 + 16 + 64 = 84 dynamics calls per
-action, the same as the baseline and inside the 256 cap. Head evaluations
-are not dynamics calls, but they are metered here anyway rather than
-argued about.
+action, the same as the baseline and inside the 256 cap.
+
+What is NOT on the meter: encoder passes (as in the baseline) and value-head
+evaluations. RULES.md bounds "learned-dynamics calls", and the head is a
+separate network that scores a latent rather than advancing one -- it is
+called once per beam entry, so metering it would exactly double the count
+to 168 and still fit. Stated here explicitly because "bypass or
+under-report the dynamics-call meter" is a listed prohibition, and the
+honest position is to say what is counted rather than let a reader assume.
 
 Checkpoint path from $DISTILL_CKPT (default distill/checkpoint.pt);
 $DISTILL_BEAM and $DISTILL_HORIZON override the planner shape.
