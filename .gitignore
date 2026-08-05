@@ -22,3 +22,6 @@ csrc/puffer/*.so
 # pufferlib symlinks these into the cwd on import
 resources
 csrc/puffer/resources
+
+experiments/
+*_weights.bin
