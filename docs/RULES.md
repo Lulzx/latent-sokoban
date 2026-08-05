@@ -170,7 +170,35 @@ Generate additional data, with total environment interactions capped at:
 
 * 2 million transition samples
 
-Every generated transition counts toward the limit.
+**What counts: every transition your model is trained on.** A transition
+enters the budget when it becomes a training sample — an `(observation,
+action, next observation)` triple your loss sees — not when it is simulated.
+
+**What does not count: search internal to a planner or solver used offline.**
+If you label data with BFS, A\*, MCTS or anything similar, the states it
+expands and discards on the way to an answer are not training samples and do
+not count. Only the rows you keep do.
+
+This matters more than it looks. BFS labelling a single 8×8 one-crate board
+expands on the order of 6,000 states to produce a few dozen usable rows,
+roughly 125 simulated transitions per kept row. Charging the search would
+cap a solver-labelled entry at a few hundred levels and make the permission
+to use a symbolic solver for data generation worthless in practice.
+
+Two consequences worth being explicit about, because they cut in opposite
+directions:
+
+* Reinforcement learning is charged in full. Every environment step a
+  policy takes during training is a transition it learns from, so a 2
+  million step run consumes the entire budget exactly.
+* Solver-labelled supervised data is cheap by comparison. That asymmetry is
+  intentional: the budget exists to bound how much *environment experience*
+  an entry consumes, and offline search consumes none — it re-derives what
+  the rules already let you compute.
+
+Declare the kept-sample count. Reporting simulated-state counts instead
+understates nothing and overstates a great deal, so it is the kept number
+that is audited.
 
 ## Compute Budget
 
@@ -285,7 +313,11 @@ The final agent may not:
   board states is not)
 * Bypass or under-report the dynamics-call meter
 
-A symbolic solver may be used for training-data generation and evaluation analysis only.
+A symbolic solver may be used for training-data generation and evaluation
+analysis only. Its internal search is free: only the samples you keep and
+train on count against the data budget (see Data Budget above). What it may
+never do is run at evaluation time, or supply anything the agent consults
+while playing.
 
 The intent of these rules: the winning system must plan in a learned
 representation under a small, audited planning budget. "Decode the image

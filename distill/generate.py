@@ -157,7 +157,8 @@ def main() -> None:
     (out / "shard_0000.json").write_text(json.dumps(meta, indent=1))
     print(f"{made} levels, {len(frames)} frames, {len(rows)} samples "
           f"-> {out} ({time.time()-t0:.0f}s)")
-    print("every transition counts toward the Fixed Environment-Steps budget")
+    print(f"{len(rows)} kept samples count toward the Fixed Environment-Steps "
+          f"budget; the solver's internal search does not (docs/RULES.md)")
 
 
 if __name__ == "__main__":
