@@ -89,6 +89,11 @@ nav:
   # cannot be a built page here; it is linked in rather than duplicated.
   - API reference (live): https://sokoban.lulzx.space/api/docs
   - Full rules: RULES.md
+  - Reference implementation:
+      - Spatial world model: world-model.md
+      - Distance-to-goal labelling: labelling.md
+      - RL and dense reward: reinforcement-learning.md
+      - Threat model and hardening: threat-model.md
   - Play: play.md
   - Code reference:
       - reference/index.md
