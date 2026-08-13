@@ -1,23 +1,26 @@
 /* Fast distance-to-goal labelling for wm/generate.py, exposed via ctypes.
  *
- * wm/generate.py's Python label() runs a BFS per state (plus one per
- * successor, so up to five), which dominates generation at 3-4 crates
- * (measured 0.5 and 0.16 levels/s). A per-state forward BFS in C was not the
- * fix: the hash table grows to a power of two far larger than the search and
- * thrashes cache, and it was SLOWER than CPython's dict at 4 crates.
+ * One reverse BFS from the goal states per level fills the distance-to-goal
+ * for every solvable state, after which each query is an O(1) lookup. The
+ * first C version stored states in a hash table and was cache-hostile at
+ * 3-4 crates; the per-state forward BFS was worse (one BFS per queried state
+ * plus one per successor).
  *
- * The right answer is one REVERSE BFS from the goal states per level
- * (csrc/solver.h, sk_fill_dist): the reverse of a push is a pull, so the
- * reversed edges are exactly the reversed forward edges and reverse distance
- * from the goal equals forward distance to the goal. One BFS labels every
- * non-dead state; lookups are then O(1).
+ * This version stores distances in a DENSE array indexed by a combinadic rank
+ * of the crate positions over the level's FREE cells, times the player cell.
+ * For an 8x8 board with ~30 free cells the whole 4-crate state space is
+ * C(30,4) * 30 ~= 820k entries (1.6 MB as uint16), so the BFS does direct
+ * indexed writes instead of hash probes and runs in single-digit milliseconds
+ * per level at every crate count.
+ *
+ * Assumes an 8x8 board (<=64 cells), which is everything the benchmark and the
+ * world model use.
  *
  * Build:
  *     cc -O2 -shared -o csrc/liblabelsokoban.dylib csrc/label_impl.c
  *
- * ABI (C-order arrays; boxes is n*BOX_WORDS uint64 bitboards, players are
- * cell indices r*w+c):
- *     void* fill_dist(walls, goals, h, w, max_nodes)   -> opaque DistMap*
+ * ABI (C-order; boxes is BOX_WORDS uint64 bitboards, player is a cell index):
+ *     void* fill_dist(walls, goals, h, w, max_nodes)   -> opaque handle
  *     int    lookup_dist(handle, boxes, player)        -> dist or -1 (dead)
  *     void   free_dist(handle)
  */
@@ -27,7 +30,20 @@
 #include <string.h>
 
 #include "sokoban.h"
-#include "solver.h"
+
+#define MAX_CRATES 4
+#define UNVISITED 0xFFFFu
+
+typedef struct {
+    int f, k, w;
+    uint8_t cell_to_free[64];    /* cell -> free index, 0xFF if wall */
+    uint8_t free_to_cell[64];    /* free index -> cell */
+    uint64_t comb[65][MAX_CRATES + 1];
+    uint64_t n_states;           /* C(f, k) * f */
+    uint16_t* dist;
+    uint32_t* queue;
+    int qhead, qtail;
+} DenseMap;
 
 static void build_level(Level* lv, const uint8_t* walls, const uint8_t* goals,
                         int h, int w) {
@@ -43,27 +59,149 @@ static void build_level(Level* lv, const uint8_t* walls, const uint8_t* goals,
         }
 }
 
+static void comb_init(DenseMap* m) {
+    m->comb[0][0] = 1;
+    for (int r = 1; r <= MAX_CRATES; r++) m->comb[0][r] = 0;
+    for (int n = 1; n <= 64; n++) {
+        m->comb[n][0] = 1;
+        for (int r = 1; r <= MAX_CRATES; r++)
+            m->comb[n][r] = m->comb[n - 1][r - 1]
+                            + (r <= n - 1 ? m->comb[n - 1][r] : 0);
+    }
+}
+
+static inline void sort4(uint8_t* c, int k) {
+    for (int i = 1; i < k; i++) {
+        uint8_t t = c[i];
+        int j = i - 1;
+        while (j >= 0 && c[j] > t) { c[j + 1] = c[j]; j--; }
+        c[j + 1] = t;
+    }
+}
+
+/* Combinadic rank of the sorted free-index combination c[0..k-1]. */
+static inline uint64_t comb_rank(const DenseMap* m, const uint8_t* c, int k) {
+    uint64_t r = 0;
+    for (int j = 0; j < k; j++) r += m->comb[c[j]][j + 1];
+    return r;
+}
+
+static void dense_push(DenseMap* m, const uint8_t* cr, int p, uint16_t d) {
+    uint64_t idx = comb_rank(m, cr, m->k) * m->f + p;
+    if (m->dist[idx] != UNVISITED) return;
+    m->dist[idx] = d + 1;
+    uint32_t st = (uint32_t)p;
+    for (int j = 0; j < m->k; j++) st |= ((uint32_t)cr[j] << (6 * (j + 1)));
+    m->queue[m->qtail++] = st;
+}
+
+static void dense_fill(DenseMap* m, const Level* lv, int max_nodes) {
+    for (int i = 0; i < 64; i++) m->cell_to_free[i] = 0xFF;
+    m->f = 0;
+    for (int r = 0; r < lv->h; r++)
+        for (int c = 0; c < lv->w; c++) {
+            int cell = r * lv->w + c;
+            if (!lv->walls[r][c]) {
+                m->cell_to_free[cell] = (uint8_t)m->f;
+                m->free_to_cell[m->f] = (uint8_t)cell;
+                m->f++;
+            }
+        }
+    m->k = lv->n_goals;
+    m->w = lv->w;
+    m->n_states = m->comb[m->f][m->k] * m->f;
+    m->dist = (uint16_t*)malloc(m->n_states * sizeof(uint16_t));
+    m->queue = (uint32_t*)malloc(m->n_states * sizeof(uint32_t));
+    for (uint64_t i = 0; i < m->n_states; i++) m->dist[i] = UNVISITED;
+    m->qhead = m->qtail = 0;
+
+    /* seed every goal state: crates on goals, player on a free non-goal cell */
+    uint8_t gc[MAX_CRATES];
+    int ng = 0;
+    for (int r = 0; r < lv->h; r++)
+        for (int c = 0; c < lv->w; c++)
+            if (lv->goals[r][c]) gc[ng++] = m->cell_to_free[r * lv->w + c];
+    sort4(gc, ng);
+    uint64_t grank = comb_rank(m, gc, ng);
+    for (int p = 0; p < m->f; p++) {
+        int cell = m->free_to_cell[p];
+        if (lv->goals[cell / lv->w][cell % lv->w]) continue;
+        m->dist[grank * m->f + p] = 0;
+        uint32_t st = (uint32_t)p;
+        for (int j = 0; j < ng; j++) st |= ((uint32_t)gc[j] << (6 * (j + 1)));
+        m->queue[m->qtail++] = st;
+    }
+
+    int nodes = 0;
+    while (m->qhead < m->qtail) {
+        if (++nodes > max_nodes) break;
+        uint32_t st = m->queue[m->qhead++];
+        int p = st & 63;
+        uint8_t cr[MAX_CRATES];
+        for (int j = 0; j < m->k; j++) cr[j] = (uint8_t)((st >> (6 * (j + 1))) & 63);
+        uint16_t d = m->dist[comb_rank(m, cr, m->k) * m->f + p];
+        int pr = m->free_to_cell[p];
+        int rr = pr / m->w, cc = pr % m->w;
+
+        for (int a = 0; a < N_ACTIONS; a++) {
+            int br = rr - ACT_DR[a], bc = cc - ACT_DC[a];
+            if (sk_is_wall(lv, br, bc)) continue;
+            int bfree = m->cell_to_free[br * m->w + bc];
+            int crate_behind = 0;
+            for (int j = 0; j < m->k; j++) if (cr[j] == bfree) crate_behind = 1;
+            if (crate_behind) continue;
+
+            /* reverse walk: player steps back */
+            dense_push(m, cr, bfree, d);
+
+            /* reverse pull: a crate ahead is dragged onto the player's cell */
+            int ar = rr + ACT_DR[a], ac = cc + ACT_DC[a];
+            if (sk_is_wall(lv, ar, ac)) continue;
+            int afree = m->cell_to_free[ar * m->w + ac];
+            int crate_ahead = -1;
+            for (int j = 0; j < m->k; j++) if (cr[j] == afree) crate_ahead = j;
+            if (crate_ahead >= 0) {
+                uint8_t ncr[MAX_CRATES];
+                memcpy(ncr, cr, m->k);
+                ncr[crate_ahead] = (uint8_t)p;
+                sort4(ncr, m->k);
+                dense_push(m, ncr, bfree, d);
+            }
+        }
+    }
+}
+
+static int dense_lookup(const DenseMap* m, const uint64_t* boxes,
+                        int32_t player) {
+    uint8_t cr[MAX_CRATES];
+    int nc = 0;
+    for (int cell = 0; cell < 64 && nc < m->k; cell++)
+        if (boxes[cell >> 6] & (1ULL << (cell & 63)))
+            cr[nc++] = m->cell_to_free[cell];
+    sort4(cr, nc);
+    uint64_t rank = comb_rank(m, cr, nc);
+    int p = m->cell_to_free[player];
+    uint16_t d = m->dist[rank * m->f + p];
+    return (d == UNVISITED) ? -1 : (int)d;
+}
+
 void* fill_dist(const uint8_t* walls, const uint8_t* goals, int h, int w,
                 int max_nodes) {
     Level lv;
     build_level(&lv, walls, goals, h, w);
-    DistMap* m = (DistMap*)calloc(1, sizeof(DistMap));
-    distmap_alloc(m, 14);
-    sk_fill_dist(&lv, m, max_nodes);
+    DenseMap* m = (DenseMap*)calloc(1, sizeof(DenseMap));
+    comb_init(m);
+    dense_fill(m, &lv, max_nodes);
     return m;
 }
 
 int lookup_dist(void* handle, const uint64_t* boxes, int32_t player) {
-    DistMap* m = (DistMap*)handle;
-    Key k;
-    memset(&k, 0, sizeof(k));
-    for (int wd = 0; wd < BOX_WORDS; wd++) k.boxes[wd] = boxes[wd];
-    k.player = (uint16_t)player;
-    return sk_dist_lookup(m, &k);
+    return dense_lookup((DenseMap*)handle, boxes, player);
 }
 
 void free_dist(void* handle) {
-    DistMap* m = (DistMap*)handle;
-    distmap_free(m);
+    DenseMap* m = (DenseMap*)handle;
+    free(m->dist);
+    free(m->queue);
     free(m);
 }

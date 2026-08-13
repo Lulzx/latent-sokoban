@@ -76,7 +76,110 @@ def label(level: Level, s: SokobanState, cache: dict, dist):
     return cache[key]
 
 
-def start_states(level: Level, rng: np.random.Generator, n_off: int, n_dead: int):
+def _slide_has_goal(level: Level, boxes, r: int, c: int, horizontal: bool) -> bool:
+    """Is there ANY goal in the crate's slide line (the contiguous floor cells
+    in the two slide directions until a wall)? Used only to build training
+    examples; conservative, so it never mislabels a solvable state as dead."""
+    h, w = level.height, level.width
+
+    def wall(rr, cc):
+        return not (0 <= rr < h and 0 <= cc < w) or level.walls[rr][cc]
+
+    steps = [(0, -1), (0, 1)] if horizontal else [(-1, 0), (1, 0)]
+    for dr, dc in steps:
+        rr, cc = r, c
+        while True:
+            rr += dr
+            cc += dc
+            if wall(rr, cc):
+                break
+            if (rr, cc) in level.goals:
+                return True
+    return False
+
+
+def _wall_dead(level: Level, boxes) -> bool:
+    """Sufficient (conservative) deadlock test for building training examples
+    at 4 crates, where the exact search is too slow to run per candidate. A
+    crate off-goal is dead if it is corner-wedged, or flat against a wall with
+    no goal anywhere along its slide line -- both irreversible."""
+    h, w = level.height, level.width
+
+    def wall(r, c):
+        return not (0 <= r < h and 0 <= c < w) or level.walls[r][c]
+
+    for (r, c) in boxes:
+        if (r, c) in level.goals:
+            continue
+        up, down = wall(r - 1, c), wall(r + 1, c)
+        left, right = wall(r, c - 1), wall(r, c + 1)
+        if (up or down) and (left or right):
+            return True
+        if up or down:
+            if not _slide_has_goal(level, boxes, r, c, horizontal=True):
+                return True
+        if left or right:
+            if not _slide_has_goal(level, boxes, r, c, horizontal=False):
+                return True
+    return False
+
+
+def structural_dead_states(level: Level, rng: np.random.Generator, want: int,
+                           dist=None):
+    """Dead states beyond the corner-wedged ones: a crate relocated to a
+    position that makes the level unsolvable -- flat against a wall with no
+    goal in its slide line, in a dead region, blocking a corridor, etc.
+
+    Random relocation hits these far more often than random walks do, which is
+    why the off-path perturbation almost never produces a dead state. Each
+    candidate is confirmed: with the C distance table for <=3 crates (a dead
+    state simply has no entry), and with the conservative wall/corner heuristic
+    at 4 crates where the exact search is too slow per candidate."""
+    h, w = level.height, level.width
+
+    def wall(r, c):
+        return not (0 <= r < h and 0 <= c < w) or level.walls[r][c]
+
+    free = [(r, c) for r in range(h) for c in range(w) if not wall(r, c)]
+    non_goal = [p for p in free if p not in level.goals]
+    if not non_goal:
+        return []
+    out, seen = [], set()
+    for _ in range(want * 30):
+        if len(out) >= want:
+            break
+        boxes = set(level.boxes)
+        box = tuple(boxes)[rng.integers(0, len(boxes))]
+        if rng.random() < 0.7:
+            cands = [p for p in non_goal
+                     if wall(p[0] - 1, p[1]) or wall(p[0] + 1, p[1])
+                     or wall(p[0], p[1] - 1) or wall(p[0], p[1] + 1)]
+        else:
+            cands = non_goal
+        if not cands:
+            continue
+        new_pos = cands[rng.integers(0, len(cands))]
+        if new_pos in boxes:
+            continue
+        new_boxes = frozenset((boxes - {box}) | {new_pos})
+        player = free[rng.integers(0, len(free))]
+        while player in new_boxes:
+            player = free[rng.integers(0, len(free))]
+        key = (new_boxes, player)
+        if key in seen:
+            continue
+        seen.add(key)
+        if dist is not None:
+            dead = dist.dist(SokobanState(new_boxes, player)) < 0
+        else:
+            dead = _wall_dead(level, new_boxes)
+        if dead:
+            out.append(SokobanState(new_boxes, player))
+    return out
+
+
+def start_states(level: Level, rng: np.random.Generator, n_off: int, n_dead: int,
+                 n_struct: int, dist=None):
     sol = bfs_solve(level)
     if not sol:
         return []
@@ -94,7 +197,8 @@ def start_states(level: Level, rng: np.random.Generator, n_off: int, n_dead: int
             s = successor(level, s, int(rng.integers(0, 4)))
         off.append(s)
 
-    return on_path[:-1] + off + dead_states(level, rng, n_dead)
+    return (on_path[:-1] + off + dead_states(level, rng, n_dead)
+            + structural_dead_states(level, rng, n_struct, dist))
 
 
 def main() -> None:
@@ -110,6 +214,8 @@ def main() -> None:
     ap.add_argument("--chain", type=int, default=5, help="K, actions per chain")
     ap.add_argument("--off-path", type=int, default=6)
     ap.add_argument("--dead", type=int, default=4)
+    ap.add_argument("--structural-dead", type=int, default=4,
+                    help="structural (non-corner) dead states per level")
     ap.add_argument("--per-state", type=int, default=1,
                     help="chains sampled from each start state")
     ap.add_argument("--shard", type=int, default=0,
@@ -140,19 +246,21 @@ def main() -> None:
                 max_solution_len=args.max_len, max_tries=20000)
         except RuntimeError:
             continue
-        starts = start_states(level, rng, args.off_path, args.dead)
+        # The dense reverse-BFS table is one pass over the level's solvable
+        # states and is cheap at every crate count (C(f,k)*f entries on the
+        # free cells), so there is no need for a crate-count threshold.
+        dist = clabel.DistTable(level) if clabel is not None else None
+        starts = start_states(level, rng, args.off_path, args.dead,
+                              args.structural_dead, dist)
         if not starts:
+            if dist is not None:
+                dist.close()
             continue
 
         gi = len(goals)
         goals.append(render_goal(level))
         lab_cache: dict = {}
         frame_cache: dict = {}       # dedupe frames within a level
-        # Reverse-BFS labelling is O(non-dead states); that set is ~250k at
-        # three crates but explodes at four, where the per-state Python BFS
-        # (bounded by the near-optimal states we actually query) is faster.
-        dist = (clabel.DistTable(level)
-                if clabel is not None and args.boxes <= 3 else None)
 
         def frame_of(s: SokobanState) -> int:
             key = (s.boxes, s.player)

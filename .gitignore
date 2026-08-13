@@ -25,3 +25,4 @@ csrc/puffer/resources
 
 experiments/
 *_weights.bin
+viz/
