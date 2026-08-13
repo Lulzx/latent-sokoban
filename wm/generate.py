@@ -178,8 +178,41 @@ def structural_dead_states(level: Level, rng: np.random.Generator, want: int,
     return out
 
 
+def reachable_dead_states(level: Level, on_path, rng: np.random.Generator,
+                          want: int, dist=None):
+    """Dead states the agent can actually reach: an on-path state plus one
+    push that deadlocks. This is the failure mode the dead head has to veto --
+    the tempting, irreversible push -- as opposed to the arbitrary crate
+    relocations structural_dead_states makes. A walk cannot deadlock (boxes
+    unchanged), so every dead successor here is a push, confirmed by the
+    distance table (a dead state has no entry) or the exact solver."""
+    cands = []
+    seen = set()
+    for s in on_path:
+        for a in ACTIONS:
+            s2 = successor(level, s, a)
+            if (s2.boxes, s2.player) == (s.boxes, s.player):
+                continue
+            if s2.boxes == level.goals:
+                continue
+            key = (s2.boxes, s2.player)
+            if key in seen:
+                continue
+            seen.add(key)
+            if dist is not None:
+                dead = dist.dist(s2) < 0
+            else:
+                dead = dist_to_go(level, s2) == DEAD
+            if dead:
+                cands.append(s2)
+    if not cands or not want:
+        return []
+    idx = rng.choice(len(cands), size=min(want, len(cands)), replace=False)
+    return [cands[i] for i in idx]
+
+
 def start_states(level: Level, rng: np.random.Generator, n_off: int, n_dead: int,
-                 n_struct: int, dist=None):
+                 n_struct: int, n_reach: int, dist=None):
     sol = bfs_solve(level)
     if not sol:
         return []
@@ -198,7 +231,8 @@ def start_states(level: Level, rng: np.random.Generator, n_off: int, n_dead: int
         off.append(s)
 
     return (on_path[:-1] + off + dead_states(level, rng, n_dead)
-            + structural_dead_states(level, rng, n_struct, dist))
+            + structural_dead_states(level, rng, n_struct, dist)
+            + reachable_dead_states(level, on_path, rng, n_reach, dist))
 
 
 def main() -> None:
@@ -216,6 +250,8 @@ def main() -> None:
     ap.add_argument("--dead", type=int, default=4)
     ap.add_argument("--structural-dead", type=int, default=4,
                     help="structural (non-corner) dead states per level")
+    ap.add_argument("--reachable-dead", type=int, default=4,
+                    help="on-path bad-push dead states per level")
     ap.add_argument("--per-state", type=int, default=1,
                     help="chains sampled from each start state")
     ap.add_argument("--shard", type=int, default=0,
@@ -251,7 +287,7 @@ def main() -> None:
         # free cells), so there is no need for a crate-count threshold.
         dist = clabel.DistTable(level) if clabel is not None else None
         starts = start_states(level, rng, args.off_path, args.dead,
-                              args.structural_dead, dist)
+                              args.structural_dead, args.reachable_dead, dist)
         if not starts:
             if dist is not None:
                 dist.close()
