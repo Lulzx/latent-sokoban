@@ -22,6 +22,31 @@
 
 #define SK_OBS_BYTES (2 * IMG_SIZE * IMG_SIZE * 3)
 
+/* Reward design. The original reward (+1 on solve, 0 otherwise) is sparse,
+ * and a random policy on 8x8 Sokoban solves ~0% of episodes -- so PPO has no
+ * gradient to learn from, which is why the distilled warm start drifted to
+ * random (commit 4a4480f). The fix is potential-based reward shaping:
+ * reward = Phi(s') - Phi(s) + (per-step penalty) + (solve bonus), where Phi
+ * is the negative sum of each off-goal crate's free-grid distance to its
+ * nearest goal, with a large penalty for a crate wedged in a corner.
+ *
+ * Potential-based shaping preserves the optimal policy for ANY Phi (the
+ * result is exact for F = gamma*Phi(s') - Phi(s); gamma ~ 1 makes the
+ * correction negligible), so this does not "train against a different
+ * objective" -- it gives the learner a dense signal down the same objective.
+ * The solver is used here at training time only, which docs/RULES.md permits.
+ *
+ * SK_SHAPED=0 restores the sparse reward for A/B comparison. */
+#ifndef SK_SHAPED
+#define SK_SHAPED 1
+#endif
+#ifndef SK_STEP_PENALTY
+#define SK_STEP_PENALTY 0.01f
+#endif
+#ifndef SK_DEADLOCK_PENALTY
+#define SK_DEADLOCK_PENALTY 50.0f
+#endif
+
 /* Required struct. Only use floats! */
 typedef struct {
     float perf;             /* solved fraction, the leaderboard's metric */
@@ -58,6 +83,11 @@ typedef struct {
     int tick;
     int pushed_any;
     unsigned int rng;
+
+    /* reward shaping: free-grid distance from each cell to the nearest goal
+     * (computed once per reset) and the potential of the current state */
+    uint8_t goal_dist[MAX_CELLS];
+    float pot;
 } SokobanEnv;
 
 /* Only the first half changes within an episode; the goal is written once at
@@ -78,6 +108,50 @@ static inline int sk_env_deadlocked(SokobanEnv* env) {
             if (env->state.boxes[r][c] && sk_corner_at(&env->level, r, c))
                 return 1;
     return 0;
+}
+
+/* Multi-source BFS from every goal over the free grid, giving each cell the
+ * shortest walk to a goal IGNORING crates and the player. This is the
+ * standard admissible relaxation for Sokoban: cheap (<= a few hundred cell
+ * visits), dense (defined for every cell), and monotone in crate movement.
+ * Cells unreachable from any goal stay 255 (walls; ignored by the caller). */
+static inline void sk_goal_dist(const Level* lv, uint8_t* out) {
+    int w = lv->w;
+    int q[MAX_CELLS], qh = 0, qt = 0;
+    for (int i = 0; i < MAX_CELLS; i++) out[i] = 255;
+    for (int r = 0; r < lv->h; r++)
+        for (int c = 0; c < lv->w; c++)
+            if (lv->goals[r][c]) {
+                int cell = r * w + c;
+                out[cell] = 0;
+                q[qt++] = cell;
+            }
+    while (qh < qt) {
+        int cell = q[qh++];
+        int r = cell / w, c = cell % w;
+        uint8_t d = (uint8_t)(out[cell] + 1);
+        for (int a = 0; a < N_ACTIONS; a++) {
+            int nr = r + ACT_DR[a], nc = c + ACT_DC[a];
+            if (sk_is_wall(lv, nr, nc)) continue;
+            int n = nr * w + nc;
+            if (out[n] == 255) { out[n] = d; q[qt++] = n; }
+        }
+    }
+}
+
+/* Phi(s) = -sum over off-goal crates of goal_dist[crate], with a large extra
+ * penalty for a crate wedged in a corner (irreversible). 0 at the goal. */
+static inline float sk_potential(const Level* lv, const State* st,
+                                 const uint8_t* gd) {
+    float p = 0.0f;
+    for (int r = 0; r < lv->h; r++)
+        for (int c = 0; c < lv->w; c++)
+            if (st->boxes[r][c] && !lv->goals[r][c]) {
+                int cell = r * lv->w + c;
+                if (gd[cell] != 255) p -= gd[cell];
+                if (sk_corner_at(lv, r, c)) p -= SK_DEADLOCK_PENALTY;
+            }
+    return p;
 }
 
 void add_log(SokobanEnv* env) {
@@ -120,6 +194,8 @@ void c_reset(SokobanEnv* env) {
      * pool stores no optimal length, so the configured max_steps stands in. */
     env->tick = 0;
     env->pushed_any = 0;
+    sk_goal_dist(&env->level, env->goal_dist);
+    env->pot = sk_potential(&env->level, &env->state, env->goal_dist);
     /* Deliberately does NOT clear rewards/terminals. c_step calls c_reset
      * after setting them for the episode that just ended, so clearing here
      * would erase the only reward signal the learner ever sees. */
@@ -130,7 +206,7 @@ void c_reset(SokobanEnv* env) {
 /* Required function */
 void c_step(SokobanEnv* env) {
     env->tick += 1;
-    env->rewards[0] = 0.0f;
+    env->rewards[0] = -SK_STEP_PENALTY;
     env->terminals[0] = 0;
 
     int action = env->actions[0];
@@ -141,8 +217,14 @@ void c_step(SokobanEnv* env) {
     sk_step(&env->level, &env->state, action, &pushed);
     if (pushed) env->pushed_any = 1;
 
+    if (SK_SHAPED) {
+        float new_pot = sk_potential(&env->level, &env->state, env->goal_dist);
+        env->rewards[0] += new_pot - env->pot;
+        env->pot = new_pot;
+    }
+
     if (sk_solved(&env->level, &env->state)) {
-        env->rewards[0] = 1.0f;
+        env->rewards[0] += 1.0f;
         env->terminals[0] = 1;
         add_log(env);
         c_reset(env);

@@ -54,6 +54,50 @@ def successor(level: Level, state: SokobanState, action: int) -> SokobanState:
     return env.state
 
 
+def dead_states(level: Level, rng: np.random.Generator, want: int):
+    """States that are already lost, sampled deliberately rather than found.
+
+    Random perturbation off the optimal path almost never deadlocks: measured
+    on held-out levels, under 1% of collected states were dead, which is far
+    too few for a head to learn "this is unrecoverable" from. So construct
+    them directly -- crate on a non-goal corner, player anywhere legal -- and
+    confirm each one with the solver rather than trusting the construction.
+
+    Constructing training labels with the solver is what RULES.md permits it
+    for. The agent learns deadlock from pixels; nothing hand-coded reaches
+    inference. (RULES.md lists "deadlock prediction" under allowed
+    modifications and "manually coded deadlock tables" under prohibitions --
+    the line is where the table lives, and this one exists only in the
+    labeller.)
+    """
+    h, w = level.height, level.width
+
+    def wall(r: int, c: int) -> bool:
+        return not (0 <= r < h and 0 <= c < w) or level.walls[r][c]
+
+    corners = [(r, c) for r in range(h) for c in range(w)
+               if not wall(r, c) and (r, c) not in level.goals
+               and (wall(r - 1, c) or wall(r + 1, c))
+               and (wall(r, c - 1) or wall(r, c + 1))]
+    free = [(r, c) for r in range(h) for c in range(w) if not wall(r, c)]
+    if not corners:
+        return []
+
+    out, seen = [], set()
+    for _ in range(want * 6):
+        if len(out) >= want:
+            break
+        boxes = frozenset([corners[rng.integers(0, len(corners))]])
+        player = free[rng.integers(0, len(free))]
+        if player in boxes or (boxes, player) in seen:
+            continue
+        seen.add((boxes, player))
+        s = SokobanState(boxes, player)
+        if dist_to_go(level, s) == DEAD:
+            out.append(s)
+    return out
+
+
 def collect(level: Level, rng: np.random.Generator, off_path: int):
     """States on the optimal path, plus perturbations around it.
 
@@ -97,6 +141,8 @@ def main() -> None:
     ap.add_argument("--max-len", type=int, default=20)
     ap.add_argument("--off-path", type=int, default=6,
                     help="perturbed states sampled per level")
+    ap.add_argument("--dead", type=int, default=4,
+                    help="deliberately-constructed dead states per level")
     args = ap.parse_args()
 
     rng = np.random.default_rng(args.seed)
@@ -117,29 +163,36 @@ def main() -> None:
         states = collect(level, rng, args.off_path)
         if not states:
             continue
+        states = states + dead_states(level, rng, args.dead)
         gi = len(goals)
         goals.append(render_goal(level))
         for s in states:
             d_here = dist_to_go(level, s)
-            if d_here == DEAD:
-                continue                      # no optimal action to imitate
+            # Dead states are KEPT, with an empty optimal-action mask. They
+            # used to be skipped here, which meant the value head only ever
+            # saw a DEAD label through the v_next term -- on a latent produced
+            # by the dynamics model, never on one produced by the encoder.
+            # Measured consequence (lab/probe.py): dead-state AUC was 0.918 on
+            # dynamics latents and 0.427 on encoder latents, i.e. below chance,
+            # so with accurate dynamics the planner walked into deadlocks 65%
+            # of the time. A state has to be renderable as an observation for
+            # "this is lost" to be learnable from pixels.
             oi = len(frames)
             frames.append(render(level, s))
             best = []
-            nexts = []
+            nexts, d_nexts = [], []
             for a in ACTIONS:
                 s2 = successor(level, s, a)
                 d2 = dist_to_go(level, s2)
                 ni = len(frames)
                 frames.append(render(level, s2))
                 nexts.append(ni)
-                if d2 == d_here - 1:
+                d_nexts.append(d2)
+                if d_here != DEAD and d2 == d_here - 1:
                     best.append(a)
             mask = sum(1 << a for a in best)
             for a in ACTIONS:
-                s2 = successor(level, s, a)
-                rows.append((oi, gi, a, nexts[a], d_here,
-                             dist_to_go(level, s2), mask))
+                rows.append((oi, gi, a, nexts[a], d_here, d_nexts[a], mask))
         made += 1
         if made % 200 == 0:
             print(f"  {made}/{args.levels} levels, {len(rows)} samples "
@@ -150,8 +203,13 @@ def main() -> None:
     rows = np.array(rows, dtype=np.int32)
     np.savez_compressed(out / "shard_0000.npz", frames=frames, goals=goals,
                         rows=rows)
+    dead_here = int((rows[:, 4] == DEAD).sum())
+    dead_next = int((rows[:, 5] == DEAD).sum())
+    print(f"dead rows: {dead_here} by d_here ({dead_here/len(rows):.1%}), "
+          f"{dead_next} by d_next ({dead_next/len(rows):.1%})")
     meta = {"levels": made, "frames": len(frames), "samples": len(rows),
             "seed": args.seed, "size": args.size, "n_boxes": args.boxes,
+            "dead_rows_here": dead_here, "dead_rows_next": dead_next,
             "dead_value": DEAD,
             "columns": "obs_idx,goal_idx,action,next_idx,d_here,d_next,opt_mask"}
     (out / "shard_0000.json").write_text(json.dumps(meta, indent=1))
