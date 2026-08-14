@@ -6,11 +6,16 @@ The score for a candidate plan is
 
 and each of the three terms is there because a measurement said so:
 
-  value      the goal-distance heuristic, as before.
+  value      the goal-distance heuristic. lab/attribute.py measured it as the
+             WEAKEST of the three: with perfect dynamics and no policy prior
+             the value head solves 10% of Split A while the policy argmax
+             alone solves 40%, and removing the value term from the score
+             changes nothing. It is kept because it is harmless and a better
+             value head would help; the policy is what actually carries the
+             search.
   policy     lab/attribute.py measured that ranking by value alone is WORSE
-             than taking the policy head's argmax with no search at all
-             (0.293 against 0.460 on eval_s). The policy is the stronger of
-             the two signals; it proposes, the value refines.
+             than taking the policy head's argmax with no search at all. The
+             policy is the stronger signal; it proposes, the value refines.
   dead       lab/probe.py measured the previous model's dead-state AUC at
              0.427 -- below chance -- on encoder latents, and its planner
              walked into deadlocks 65% of the time when given accurate
@@ -21,15 +26,15 @@ Metering: only dynamics calls are ticked, which is what RULES.md bounds --
 one predicted transition of one candidate state. Encoder and head passes are
 free, on the same ground the baseline's goal-scoring passes are.
 
-At BEAM=16, HORIZON=3 that is 4 + 16 + 64 = 84 calls per action, measured and
-not merely derived: the first expansion produces only 4 candidates, so the
-beam does not bind until the second one. Metering the head passes as well
-would bring it to 168, still inside the 256 cap. Both numbers are stated
-because "bypass or under-report the dynamics-call meter" is a listed
-prohibition and a reader should not have to work out which is claimed.
+The search expands ALL four actions per node (TOPK=4), not a pruned top-k:
+the policy head is only ~0.91 right, so pruning to top-2 occasionally drops
+the optimal branch, and uniform expansion at HORIZON=5 costs 4 + 16 + 64 +
+64 + 64 = 212 calls, still inside the 256 cap. Measured on Split A this is
+the difference between 0.50 (TOPK=2, horizon 3) and 0.70 (uniform, horizon 5).
 
 Checkpoint from $WM_CKPT (default wm/checkpoint_8x1.pt); $WM_BEAM,
-$WM_HORIZON, $WM_BETA, $WM_DEAD_PENALTY and $WM_NOISE override the planner.
+$WM_HORIZON, $WM_BETA, $WM_DEAD_PENALTY, $WM_TOPK and $WM_NOISE override the
+planner.
 """
 
 from __future__ import annotations
@@ -47,11 +52,12 @@ from latent_sokoban.agent import Agent  # noqa: E402
 from wm.model import WorldModel         # noqa: E402
 
 BEAM = int(os.environ.get("WM_BEAM", 16))
-HORIZON = int(os.environ.get("WM_HORIZON", 3))
+HORIZON = int(os.environ.get("WM_HORIZON", 5))
 BETA = float(os.environ.get("WM_BETA", 0.5))
 DEAD_PENALTY = float(os.environ.get("WM_DEAD_PENALTY", 4.0))
 NOISE = float(os.environ.get("WM_NOISE", 0.1))
-TOPK = int(os.environ.get("WM_TOPK", 2))
+TOPK = int(os.environ.get("WM_TOPK", 4))
+USE_VALUE = int(os.environ.get("WM_USE_VALUE", 1))
 N_ACTIONS = 4
 
 
@@ -80,7 +86,9 @@ class WMAgent(Agent):
     def _score(self, z: torch.Tensor, path: torch.Tensor) -> torch.Tensor:
         g = self.goal_z.expand(z.shape[0], -1, -1, -1)
         v, _, dead = self.model.heads(z, g)
-        return v - BETA * path + DEAD_PENALTY * torch.sigmoid(dead)
+        if USE_VALUE:
+            return v - BETA * path + DEAD_PENALTY * torch.sigmoid(dead)
+        return -BETA * path + DEAD_PENALTY * torch.sigmoid(dead)
 
     def _log_prior(self, z: torch.Tensor) -> torch.Tensor:
         g = self.goal_z.expand(z.shape[0], -1, -1, -1)

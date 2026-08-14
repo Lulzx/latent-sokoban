@@ -48,6 +48,11 @@ from latent_sokoban.render import render, render_goal        # noqa: E402
 from latent_sokoban.solver import bfs_solve, state_is_dead   # noqa: E402
 from wm.model import WorldModel                              # noqa: E402
 
+try:
+    from latent_sokoban.clabel import DistTable              # noqa: E402
+except OSError:
+    DistTable = None
+
 N_ACTIONS = 4
 DEAD = 999.0
 
@@ -190,25 +195,30 @@ class Lab:
             s = s + rng.gumbel(0.0, self.noise, size=len(s))
         return int(first[int(np.argmin(s))].item())
 
-    def act_oracle_dyn(self, level, key, theme, z_goal, rng, oracle_value):
+    def act_oracle_dyn(self, level, key, theme, z_goal, rng, oracle_value,
+                       dist=None):
         """Beam over TRUE successor states. Scoring is the swappable half.
 
         oracle_value=False: score encoded true renders with the value head,
         so the value head is judged on states it will really be asked about.
-        oracle_value=True: score with true BFS distance-to-go = the ceiling.
+        oracle_value=True: score with the TRUE distance-to-goal, read from the
+        dense labeler's table (O(1)) or, if the shared library is absent, from
+        BFS. This is the planner's ceiling.
         """
         frontier = [(key, a) for a in range(N_ACTIONS)]
         frontier = [(SokobanEnv.apply(level, key, a), a) for a in range(N_ACTIONS)]
 
+        def true_dist(k):
+            if dist is not None:
+                return dist.dist(SokobanState(frozenset(k[1]), k[0]))
+            probe = Level(level.walls, level.goals, frozenset(k[1]), k[0])
+            sol = bfs_solve(probe)
+            return -1 if sol is None else len(sol)
+
         def score_keys(keys):
             if oracle_value:
-                out = []
-                for k in keys:
-                    probe = Level(level.walls, level.goals,
-                                  frozenset(k[1]), k[0])
-                    sol = bfs_solve(probe)
-                    out.append(DEAD if sol is None else float(len(sol)))
-                return np.array(out)
+                return np.array([DEAD if true_dist(k) < 0 else float(true_dist(k))
+                                 for k in keys])
             imgs = np.stack([
                 render(level, SokobanState(frozenset(k[1]), k[0]), theme)
                 for k in keys])
@@ -246,6 +256,8 @@ def run_cell(lab: Lab, split: dict, cell: str, seed: int, limit: int | None):
         env.reset()
         rng = np.random.default_rng(seed * 100_003 + i)
         z_goal = lab.encode(render_goal(level, theme)[None])
+        dist = (DistTable(level)
+                if cell == "oracle_both" and DistTable is not None else None)
         lab.calls = 0
         n_actions = 0
         dead = False
@@ -263,13 +275,16 @@ def run_cell(lab: Lab, split: dict, cell: str, seed: int, limit: int | None):
                                        rng, oracle_value=False)
             elif cell == "oracle_both":
                 a = lab.act_oracle_dyn(level, env.state.key(), theme, z_goal,
-                                       rng, oracle_value=True)
+                                       rng, oracle_value=True, dist=dist)
             else:
                 raise SystemExit(f"unknown cell {cell}")
             n_actions += 1
             _, done, info = env.step(int(a))
             if info.pushed and not dead:
                 dead = state_is_dead(level, env.state.key())
+
+        if dist is not None:
+            dist.close()
 
         if env.solved:
             solved += 1
