@@ -158,7 +158,7 @@ class Heads(nn.Module):
     SPATIAL_GRID = 8
     SPATIAL_CH = 16
 
-    def __init__(self, ch: int = LATENT_CH, hidden: int = 96):
+    def __init__(self, ch: int = LATENT_CH, hidden: int = 192):
         super().__init__()
         self.trunk = nn.Sequential(
             nn.Conv2d(ch * 2, hidden, 3, padding=1, dilation=1), nn.ReLU(),
